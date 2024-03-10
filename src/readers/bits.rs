@@ -18,6 +18,7 @@ impl<B: Buf> BitReader<B> {
 
 impl<B: Buf> BitReader<B> {
     pub fn read_bits(&mut self, count: usize) -> u64 {
+        // Check for a 0 count because the code assumes count > 0
         if count == 0 {
             return 0;
         }

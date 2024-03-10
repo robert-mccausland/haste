@@ -9,7 +9,9 @@ pub trait Bytes {
 pub trait Bits {
     fn read_varint_u64(&mut self) -> Result<u64>;
     fn read_varint_u32(&mut self) -> Result<u32>;
+    fn read_varint_i32(&mut self) -> Result<i32>;
     fn read_varbit(&mut self) -> u32;
+    fn read_varbit_field_path(&mut self) -> Result<i32>;
     fn read_boolean(&mut self) -> bool;
     fn read_string(&mut self) -> Result<String>;
 }
@@ -52,6 +54,12 @@ impl<B: Buf> Bits for BitReader<B> {
         Ok(self.read_varint_u64()?.try_into()?)
     }
 
+    fn read_varint_i32(&mut self) -> Result<i32> {
+        let unsigned = self.read_varint_u32()?;
+        let signed = (unsigned >> 1) as i32;
+        Ok(if unsigned & 1 != 0 { !signed } else { signed })
+    }
+
     fn read_varbit(&mut self) -> u32 {
         let start = self.read_bits(6) as u8;
         let indicator = start >> 4;
@@ -64,6 +72,28 @@ impl<B: Buf> Bits for BitReader<B> {
         };
 
         return (start as u32 & 15) | ((self.read_bits(length) as u32) << 4);
+    }
+
+    fn read_varbit_field_path(&mut self) -> Result<i32> {
+        let mut i = 0;
+        while i < 4 {
+            if self.read_boolean() {
+                break;
+            }
+
+            i += 1;
+        }
+
+        let bit_count = match i {
+            0 => 2,
+            1 => 4,
+            2 => 10,
+            3 => 17,
+            4 => 31,
+            _ => Err(format!("Invalid bit_count"))?,
+        };
+
+        return Ok(self.read_bits(bit_count) as i32);
     }
 
     fn read_boolean(&mut self) -> bool {

@@ -12,6 +12,7 @@ debug = true
 
 [dependencies]
 bytes = "1.5.0"
+once_cell = "1.19.0"
 prost = "0.12.3"
 snap = "1.1.1"
 

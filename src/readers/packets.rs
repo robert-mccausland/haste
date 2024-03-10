@@ -30,7 +30,6 @@ impl<B: Buf> PacketReader<B> {
                 let data = self.stream.read_bytes(size);
                 return Ok(Some(Packet::decode(kind, data.as_slice())?));
             } else {
-                //self.stream.read_bytes(size);
                 self.stream.advance(size * 8);
             }
         }
