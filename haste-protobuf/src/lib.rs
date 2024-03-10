@@ -1,10 +1,11 @@
-use crate::Result;
 use bytes::Buf;
 use prost::Message;
 
 pub mod dota {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
+
+type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
 // Some messages we don't get from the provided proto files, this is a placeholder message
 // to indicate that we don't have the ability to decode these yet
@@ -49,7 +50,7 @@ macro_rules! decoder {
         }
 
         impl $enum_name {
-            pub fn decode<B>(kind: $enum_kind_name, buf: B) -> Result<$enum_name>
+            pub fn decode<B>(kind: &$enum_kind_name, buf: B) -> Result<$enum_name>
                 where B: Buf {
                 match kind {
                     $(

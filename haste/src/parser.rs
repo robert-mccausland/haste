@@ -1,25 +1,34 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     io::{Read, Seek},
 };
 
+use haste_protobuf::{dota, Demo, DemoKind, Packet, PacketKind};
+
 use crate::{
-    protos::{dota, Demo, DemoKind, Packet, PacketKind},
+    entities::Entities,
     readers::{bits::BitReader, demos::DemoReader, packets::PacketReader},
     string_tables::StringTable,
     Result,
 };
 
 const SIGNATURE: &[u8] = b"PBDEMS2\0";
+const INSTANCE_BASELINE_STRING_TABLE_NAME: &str = "instancebaseline";
 
 const DEMOS_INTERNALLY_HANDLED: &[DemoKind] = &[
     DemoKind::Packet,
     DemoKind::SignOnPacket,
     DemoKind::FullPacket,
+    DemoKind::SendTables,
+    DemoKind::ClassInfo,
 ];
 
-const PACKETS_INTERNALLY_HANDLED: &[PacketKind] =
-    &[PacketKind::CreateStringTable, PacketKind::UpdateStringTable];
+const PACKETS_INTERNALLY_HANDLED: &[PacketKind] = &[
+    PacketKind::CreateStringTable,
+    PacketKind::UpdateStringTable,
+    PacketKind::PacketEntities,
+    PacketKind::ServerInfo,
+];
 
 pub trait EventHandler {
     fn on_demo(&mut self, _demo: Demo, _context: &ParserContext) -> Result<()> {
@@ -34,6 +43,7 @@ pub trait EventHandler {
 pub struct ParserContext {
     string_tables: Vec<StringTable>,
     string_table_names: HashMap<String, usize>,
+    entities: Entities,
 }
 
 pub struct Parser<T: EventHandler> {
@@ -65,6 +75,7 @@ impl<T: EventHandler> Parser<T> {
             context: ParserContext {
                 string_tables: vec![],
                 string_table_names: HashMap::new(),
+                entities: Entities::new(),
             },
             event_handler,
             demos_handled: Vec::from_iter(
@@ -99,13 +110,18 @@ impl<T: EventHandler> Parser<T> {
         // Read demo messages
         let reader = DemoReader::new(data, self.demos_handled.to_owned());
         for message in reader {
-            match message?.content {
+            let message = message?;
+            match message.content {
                 Demo::SignOnPacket(packet) => self.handle_packet(packet)?,
                 Demo::Packet(packet) => self.handle_packet(packet)?,
                 Demo::FullPacket(data) => {
                     if let Some(packet) = data.packet {
                         self.handle_packet(packet)?
                     }
+                }
+                Demo::ClassInfo(class_info) => self.context.entities.on_class_info(class_info)?,
+                Demo::SendTables(send_tables) => {
+                    self.context.entities.on_send_tables(send_tables)?
                 }
                 demo => self.event_handler.on_demo(demo, &self.context)?,
             }
@@ -122,16 +138,23 @@ impl<T: EventHandler> Parser<T> {
 
         // We must sort packets as some packets contain data that is needed to process other packets.
         let mut packets = packet_reader.collect::<Result<Vec<_>>>()?;
-        packets.sort_by_key(|packet| match packet {
-            Packet::CreateStringTable(_) => -2,
-            Packet::UpdateStringTable(_) => -1,
+        packets.sort_by_key(|packet| match packet.kind {
+            PacketKind::CreateStringTable => -2,
+            PacketKind::UpdateStringTable => -1,
             _ => 0,
         });
 
         for packet in packets {
-            match packet {
+            match packet.content {
                 Packet::CreateStringTable(message) => self.on_create_string_table(message)?,
                 Packet::UpdateStringTable(message) => self.on_update_string_table(message)?,
+                Packet::ServerInfo(message) => self
+                    .context
+                    .entities
+                    .update_max_classes(message.max_classes().try_into()?),
+                Packet::PacketEntities(message) => {
+                    self.context.entities.on_packet_entities(message)?
+                }
                 packet => self.event_handler.on_packet(packet, &self.context)?,
             }
         }
@@ -164,6 +187,11 @@ impl<T: EventHandler> Parser<T> {
             message.name.unwrap_or_default(),
             self.context.string_tables.len(),
         );
+
+        if string_table.get_name() == INSTANCE_BASELINE_STRING_TABLE_NAME {
+            self.context.entities.update_baselines(&string_table)?;
+        }
+
         self.context.string_tables.push(string_table);
 
         Ok(())
@@ -179,6 +207,10 @@ impl<T: EventHandler> Parser<T> {
                 message.string_data(),
                 message.num_changed_entries().try_into()?,
             )?;
+
+            if string_table.get_name() == INSTANCE_BASELINE_STRING_TABLE_NAME {
+                self.context.entities.update_baselines(string_table)?;
+            }
         }
 
         Ok(())

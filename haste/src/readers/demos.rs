@@ -1,10 +1,6 @@
-use crate::{
-    decoders::Bytes,
-    protos::{Demo, DemoKind},
-    Result,
-};
-
+use crate::{decoders::Bytes, Result};
 use bytes::Buf;
+use haste_protobuf::{Demo, DemoKind};
 use std::{
     collections::HashSet,
     io::{Read, Seek},
@@ -16,6 +12,15 @@ pub struct DemoMessage {
     pub kind: DemoKind,
     pub tick: i32,
     pub content: Demo,
+}
+
+impl core::fmt::Debug for DemoMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DemoMessage")
+            .field("kind", &self.kind)
+            .field("tick", &self.tick)
+            .finish()
+    }
 }
 
 pub struct DemoReader<R: Read + Seek> {
@@ -35,7 +40,7 @@ impl<R: Read + Seek> DemoReader<R> {
         }
     }
 
-    fn read_message_header<B: Buf>(buffer: &mut B) -> Result<(DemoKind, bool, i32, usize)> {
+    fn read_message_header<B: Buf>(mut buffer: B) -> Result<(DemoKind, bool, i32, usize)> {
         let kind: u32 = buffer.decode_varint()?.try_into()?;
         let tick = buffer.decode_varint_signed()?;
         let size: usize = buffer.decode_varint()?.try_into()?;
@@ -80,7 +85,7 @@ impl<R: Read + Seek> DemoReader<R> {
                     message_data = snap::raw::Decoder::new().decompress_vec(&message_data)?;
                 }
 
-                let content = Demo::decode(kind.clone().try_into()?, message_data.as_slice())?;
+                let content = Demo::decode(&kind.clone().try_into()?, message_data.as_slice())?;
                 Some(DemoMessage {
                     kind,
                     tick,

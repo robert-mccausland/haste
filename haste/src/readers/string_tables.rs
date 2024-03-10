@@ -1,4 +1,4 @@
-use bytes::Buf;
+
 
 use crate::decoders::Bits;
 use crate::Result;
@@ -9,12 +9,12 @@ const KEY_HISTORY_BITS: usize = 5;
 const KEY_HISTORY_SIZE: usize = 1 << KEY_HISTORY_BITS;
 const KEY_HISTORY_MASK: usize = KEY_HISTORY_SIZE - 1;
 
-pub struct StringTableReader<B: Buf> {
+pub struct StringTableReader<'a> {
     index: usize,
     entry_index: i32,
     entry_count: usize,
     key_history: Vec<String>,
-    data: BitReader<B>,
+    data: BitReader<'a>,
     data_size_bits: Option<usize>,
     has_varint_bit_counts: bool,
     flags: u32,
@@ -26,9 +26,9 @@ pub struct StringTableReaderEntry {
     pub data: Option<Vec<u8>>,
 }
 
-impl<B: Buf> StringTableReader<B> {
+impl<'a> StringTableReader<'a> {
     pub fn new(
-        data: B,
+        data: &'a [u8],
         entry_count: usize,
         data_size_bits: Option<usize>,
         has_varint_bit_counts: bool,
@@ -124,7 +124,7 @@ impl<B: Buf> StringTableReader<B> {
     }
 }
 
-impl<B: Buf> Iterator for StringTableReader<B> {
+impl<'a> Iterator for StringTableReader<'a> {
     type Item = Result<StringTableReaderEntry>;
 
     fn next(&mut self) -> Option<Self::Item> {
