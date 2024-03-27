@@ -1,4 +1,4 @@
-use bytes::Buf;
+
 
 use crate::{decoders::Bits, readers::bits::BitReader, Result};
 
@@ -61,7 +61,7 @@ impl QuantizedFloatDecoder {
 
         let mut steps = 1 << bit_count;
 
-        let (_range, offset) = if flags & Self::ROUND_DOWN != 0 {
+        let (_range, _offset) = if flags & Self::ROUND_DOWN != 0 {
             let range = high - low;
             let offset = range / steps as f32;
             high -= offset;

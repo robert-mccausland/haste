@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::{readers::string_tables::StringTableReader, Result};
-use bytes::Buf;
 
 pub struct StringTable {
     name: String,

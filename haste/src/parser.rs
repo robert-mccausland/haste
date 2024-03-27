@@ -109,10 +109,8 @@ impl<T: EventHandler> Parser<T> {
 
         // Read demo messages
         let reader = DemoReader::new(data, self.demos_handled.to_owned());
-        let mut count = 0;
         for message in reader {
             let message = message?;
-            // println!("parsing demo message number {:}: {:?}", count, &message);
             match message.content {
                 Demo::SignOnPacket(packet) => self.handle_packet(packet)?,
                 Demo::Packet(packet) => self.handle_packet(packet)?,
@@ -127,7 +125,6 @@ impl<T: EventHandler> Parser<T> {
                 }
                 demo => self.event_handler.on_demo(demo, &self.context)?,
             }
-            count += 1;
         }
 
         Ok(())
@@ -147,9 +144,7 @@ impl<T: EventHandler> Parser<T> {
             _ => 0,
         });
 
-        let mut count = 0;
         for packet in packets {
-            // println!("parsing packet number {:}: {:?}", count, packet);
             match packet.content {
                 Packet::CreateStringTable(message) => self.on_create_string_table(message)?,
                 Packet::UpdateStringTable(message) => self.on_update_string_table(message)?,
@@ -162,8 +157,6 @@ impl<T: EventHandler> Parser<T> {
                 }
                 packet => self.event_handler.on_packet(packet, &self.context)?,
             }
-
-            count += 1;
         }
 
         Ok(())

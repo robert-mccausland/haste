@@ -112,7 +112,7 @@ impl<'a> Bits for BitReader<'a> {
         }
     }
 }
-
+#[allow(unused)]
 mod tests {
     use super::*;
 

@@ -1,5 +1,5 @@
 use once_cell::sync::Lazy;
-use std::{borrow::Borrow, ops::Deref};
+use std::ops::Deref;
 
 use crate::{
     decoders::Bits,

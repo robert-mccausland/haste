@@ -11,7 +11,7 @@ use crate::{
     },
     utils, Result,
 };
-use bytes::Buf;
+
 use once_cell::sync::Lazy;
 
 use super::{bits::BitReader, field_paths::read_field_paths};

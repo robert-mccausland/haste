@@ -72,7 +72,7 @@ impl<'a> BitReader<'a> {
         self.last_byte_offset = ((self.last_byte_offset + count - 1) & 7) + 1;
     }
 }
-
+#[allow(unused)]
 mod tests {
     use super::*;
 

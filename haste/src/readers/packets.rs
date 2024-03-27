@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use bytes::Buf;
 use haste_protobuf::{Packet, PacketKind};
 
 use crate::{decoders::Bits, readers::bits::BitReader, Result};
