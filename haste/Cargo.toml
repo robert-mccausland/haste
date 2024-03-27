@@ -1,0 +1,15 @@
+[package]
+name = "haste"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+bytes = "1.5.0"
+once_cell = "1.19.0"
+prost = "0.12.3"
+regex = "1.10.4"
+snap = "1.1.1"
+haste_protobuf = { path = "../haste-protobuf" }

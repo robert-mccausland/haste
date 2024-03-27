@@ -1,7 +1,5 @@
-use haste::{
-    parser::{EventHandler, Parser, ParserContext},
-    protos::{dota::DotaCombatlogTypes, Packet, PacketKind},
-};
+use haste::parser::{EventHandler, Parser, ParserContext};
+use haste_protobuf::{dota::DotaCombatlogTypes, Packet, PacketKind};
 use std::{fs::File, io::Write, time::Instant};
 
 fn main() {

@@ -1,5 +1,6 @@
-use crate::{readers::bits::BitReader, Result};
 use bytes::Buf;
+
+use crate::{readers::bits::BitReader, Result};
 
 pub trait Bytes {
     fn decode_varint(&mut self) -> Result<u64>;
@@ -31,7 +32,7 @@ impl<B: Buf> Bytes for B {
     }
 }
 
-impl<B: Buf> Bits for BitReader<B> {
+impl<'a> Bits for BitReader<'a> {
     fn read_varint_u64(&mut self) -> Result<u64> {
         let mut result = 0;
         let mut offset = 0;

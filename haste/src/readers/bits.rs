@@ -1,13 +1,13 @@
 use bytes::Buf;
 
-pub struct BitReader<B: Buf> {
-    buffer: B,
+pub struct BitReader<'a> {
+    buffer: &'a [u8],
     last_byte_offset: usize,
     last_byte: u8,
 }
 
-impl<B: Buf> BitReader<B> {
-    pub fn new(buffer: B) -> Self {
+impl<'a> BitReader<'a> {
+    pub fn new(buffer: &'a [u8]) -> Self {
         Self {
             buffer,
             last_byte_offset: 8,
@@ -16,7 +16,7 @@ impl<B: Buf> BitReader<B> {
     }
 }
 
-impl<B: Buf> BitReader<B> {
+impl<'a> BitReader<'a> {
     pub fn read_bits(&mut self, count: usize) -> u64 {
         // Check for a 0 count because the code assumes count > 0
         if count == 0 {
@@ -28,7 +28,8 @@ impl<B: Buf> BitReader<B> {
         let mut bits_read = 8 - self.last_byte_offset;
 
         // Read any additional bytes that we need to get the total count
-        while bits_read < count && self.buffer.remaining() != 0 {
+        while bits_read < count {
+            /*&& self.buffer.remaining() != 0 { */
             self.last_byte = self.buffer.get_u8();
             result += (self.last_byte as u64) << bits_read;
             bits_read += 8;

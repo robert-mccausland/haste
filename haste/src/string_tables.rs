@@ -71,7 +71,7 @@ impl StringTable {
             .collect()
     }
 
-    pub(crate) fn update_entries<B: Buf>(&mut self, data: B, count: usize) -> Result<()> {
+    pub(crate) fn update_entries(&mut self, data: &[u8], count: usize) -> Result<()> {
         let reader = StringTableReader::new(
             data,
             count,
