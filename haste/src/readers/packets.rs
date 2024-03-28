@@ -34,7 +34,7 @@ impl<'a> PacketReader<'a> {
         while self.stream.remaining_bits() >= 8 {
             let kind = self.stream.read_varbit().try_into()?;
             let size = self.stream.read_varint_u32()?.try_into()?;
-            if self.messages_kinds.contains(&kind) || true {
+            if self.messages_kinds.contains(&kind) {
                 let data = self.stream.read_bytes(size);
                 return Ok(Some(PacketMessage {
                     content: Packet::decode(&kind, data.as_slice())?,

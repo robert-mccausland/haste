@@ -8,7 +8,9 @@ fn main() {
     let mut file = File::open(replay_file_path).unwrap();
     let handler = Handler {};
     let start = Instant::now();
-    Parser::new(handler, &[], &[]).parse(&mut file).unwrap();
+    Parser::new(handler, &[], &[], true)
+        .parse(&mut file)
+        .unwrap();
     let duration = Instant::now().duration_since(start);
     eprintln!("Parsing took {:?}", duration);
 }

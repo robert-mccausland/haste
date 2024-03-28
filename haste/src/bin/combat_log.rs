@@ -8,10 +8,10 @@ fn main() {
         "H:\\SteamLibrary\\steamapps\\common\\dota 2 beta\\game\\dota\\replays\\7588607085.dem";
     let mut file = File::open(replay_file_path).unwrap();
     let handler = CombatLogHandler {
-        output: std::io::stdout(),
+        output: File::create("./combat-log.txt").unwrap(),
     };
     let start = Instant::now();
-    Parser::new(handler, &[], &[PacketKind::CombatLogData])
+    Parser::new(handler, &[], &[PacketKind::CombatLogData], false)
         .parse(&mut file)
         .unwrap();
     let duration = Instant::now().duration_since(start);

@@ -15,21 +15,6 @@ use crate::{
 const SIGNATURE: &[u8] = b"PBDEMS2\0";
 const BASELINES_TABLE_NAME: &str = "instancebaseline";
 
-const DEMOS_INTERNALLY_HANDLED: &[DemoKind] = &[
-    DemoKind::Packet,
-    DemoKind::SignOnPacket,
-    DemoKind::FullPacket,
-    DemoKind::SendTables,
-    DemoKind::ClassInfo,
-];
-
-const PACKETS_INTERNALLY_HANDLED: &[PacketKind] = &[
-    PacketKind::CreateStringTable,
-    PacketKind::UpdateStringTable,
-    PacketKind::PacketEntities,
-    PacketKind::ServerInfo,
-];
-
 pub trait EventHandler {
     fn on_demo(&mut self, _demo: Demo, _context: &ParserContext) -> Result<()> {
         Ok(())
@@ -70,6 +55,7 @@ impl<T: EventHandler> Parser<T> {
         event_handler: T,
         demos_handled: &[DemoKind],
         packets_handled: &[PacketKind],
+        parse_entities: bool,
     ) -> Self {
         Self {
             context: ParserContext {
@@ -82,13 +68,13 @@ impl<T: EventHandler> Parser<T> {
                 demos_handled
                     .to_owned()
                     .into_iter()
-                    .chain(DEMOS_INTERNALLY_HANDLED.to_owned()),
+                    .chain(get_internal_demos(parse_entities).to_owned()),
             ),
             packets_handled: Vec::from_iter(
                 packets_handled
                     .to_owned()
                     .into_iter()
-                    .chain(PACKETS_INTERNALLY_HANDLED.to_owned()),
+                    .chain(get_internal_packets(parse_entities).to_owned()),
             ),
         }
     }
@@ -223,5 +209,36 @@ impl<T: EventHandler> Parser<T> {
         }
 
         Ok(())
+    }
+}
+
+fn get_internal_demos(parse_entities: bool) -> &'static [DemoKind] {
+    if parse_entities {
+        return &[
+            DemoKind::Packet,
+            DemoKind::SignOnPacket,
+            DemoKind::FullPacket,
+            DemoKind::SendTables,
+            DemoKind::ClassInfo,
+        ];
+    } else {
+        return &[
+            DemoKind::Packet,
+            DemoKind::SignOnPacket,
+            DemoKind::FullPacket,
+        ];
+    }
+}
+
+fn get_internal_packets(parse_entities: bool) -> &'static [PacketKind] {
+    if parse_entities {
+        return &[
+            PacketKind::CreateStringTable,
+            PacketKind::UpdateStringTable,
+            PacketKind::PacketEntities,
+            PacketKind::ServerInfo,
+        ];
+    } else {
+        return &[PacketKind::CreateStringTable, PacketKind::UpdateStringTable];
     }
 }
