@@ -1,5 +1,5 @@
 use once_cell::sync::Lazy;
-use std::ops::Deref;
+use std::{collections::LinkedList, mem::MaybeUninit, ops::Deref};
 
 use crate::{
     decoders::Bits,
@@ -13,6 +13,7 @@ struct FieldPathOperation {
     name: &'static str,
     weight: u32,
     operation: fn(&mut BitReader, &mut FieldPath),
+    is_final: bool,
 }
 
 impl<'a> Clone for FieldPathOperation {
@@ -21,6 +22,7 @@ impl<'a> Clone for FieldPathOperation {
             name: self.name,
             weight: self.weight.clone(),
             operation: self.operation.clone(),
+            is_final: self.is_final.clone(),
         }
     }
 }
@@ -35,11 +37,10 @@ impl<'a> Weighted for FieldPathOperation {
     }
 }
 
-pub fn read_field_paths(data: &mut BitReader) -> Vec<FieldPath> {
+pub fn read_field_paths(data: &mut BitReader, output: &mut [MaybeUninit<FieldPath>]) -> usize {
     let mut node = HUFFMAN_TREE.deref();
-    let mut result = Vec::new();
+    let mut index = 0;
     let mut current = FieldPath {
-        done: false,
         last: 0,
         path: [-1, 0, 0, 0, 0, 0, 0],
     };
@@ -48,10 +49,11 @@ pub fn read_field_paths(data: &mut BitReader) -> Vec<FieldPath> {
         match &node.content {
             huffman_tree::NodeContent::Leaf(value) => {
                 (value.operation)(data, &mut current);
-                if current.done {
-                    return result;
+                if value.is_final {
+                    return index;
                 } else {
-                    result.push(current.clone());
+                    output[index] = MaybeUninit::new(current.clone());
+                    index += 1;
                     node = HUFFMAN_TREE.deref();
                 };
             }
@@ -68,6 +70,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
             name: "PlusOne",
             weight: 36271,
             operation: |_data, field_path| field_path.path[field_path.last as usize] += 1,
+            is_final: false,
         },
         FieldPathOperation {
             name: "PlusTwo",
@@ -75,6 +78,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
             operation: |_data, field_path| {
                 field_path.path[field_path.last as usize] += 2;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PlusThree",
@@ -82,6 +86,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
             operation: |_data, field_path| {
                 field_path.path[field_path.last as usize] += 3;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PlusFour",
@@ -89,6 +94,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
             operation: |_data, field_path| {
                 field_path.path[field_path.last as usize] += 4;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PlusN",
@@ -97,6 +103,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.path[field_path.last as usize] +=
                     data.read_varbit_field_path().unwrap() + 5;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushOneLeftDeltaZeroRightZero",
@@ -105,6 +112,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = 0;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushOneLeftDeltaZeroRightNonZero",
@@ -113,6 +121,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_varbit_field_path().unwrap();
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushOneLeftDeltaOneRightZero",
@@ -122,6 +131,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = 0;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushOneLeftDeltaOneRightNonZero",
@@ -131,6 +141,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_varbit_field_path().unwrap();
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushOneLeftDeltaNRightZero",
@@ -140,6 +151,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = 0;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushOneLeftDeltaNRightNonZero",
@@ -151,6 +163,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.path[field_path.last as usize] =
                     data.read_varbit_field_path().unwrap() + 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushOneLeftDeltaNRightNonZeroPack6Bits",
@@ -160,6 +173,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_bits(3) as i32 + 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushOneLeftDeltaNRightNonZeroPack8Bits",
@@ -169,6 +183,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_bits(4) as i32 + 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushTwoLeftDeltaZero",
@@ -179,6 +194,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] += data.read_varbit_field_path().unwrap();
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushTwoPack5LeftDeltaZero",
@@ -189,6 +205,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_bits(5) as i32;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushThreeLeftDeltaZero",
@@ -201,6 +218,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] += data.read_varbit_field_path().unwrap();
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushThreePack5LeftDeltaZero",
@@ -213,6 +231,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_bits(5) as i32;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushTwoLeftDeltaOne",
@@ -224,6 +243,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] += data.read_varbit_field_path().unwrap();
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushTwoPack5LeftDeltaOne",
@@ -235,6 +255,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_bits(5) as i32;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushThreeLeftDeltaOne",
@@ -248,6 +269,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] += data.read_varbit_field_path().unwrap();
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushThreePack5LeftDeltaOne",
@@ -261,6 +283,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_bits(5) as i32;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushTwoLeftDeltaN",
@@ -272,6 +295,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] += data.read_varbit_field_path().unwrap();
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushTwoPack5LeftDeltaN",
@@ -283,6 +307,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_bits(5) as i32;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushThreeLeftDeltaN",
@@ -296,6 +321,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] += data.read_varbit_field_path().unwrap();
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushThreePack5LeftDeltaN",
@@ -309,6 +335,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.last += 1;
                 field_path.path[field_path.last as usize] = data.read_bits(5) as i32;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushN",
@@ -322,6 +349,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                         data.read_varbit_field_path().unwrap();
                 }
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PushNAndNonTopological",
@@ -339,6 +367,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                         data.read_varbit_field_path().unwrap();
                 }
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopOnePlusOne",
@@ -347,6 +376,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.pop(1);
                 field_path.path[field_path.last as usize] += 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopOnePlusN",
@@ -356,6 +386,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.path[field_path.last as usize] +=
                     data.read_varbit_field_path().unwrap() + 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopAllButOnePlusOne",
@@ -364,6 +395,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.pop(field_path.last);
                 field_path.path[0] += 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopAllButOnePlusN",
@@ -372,6 +404,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.pop(field_path.last);
                 field_path.path[0] += data.read_varbit_field_path().unwrap() + 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopAllButOnePlusNPack3Bits",
@@ -380,6 +413,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.pop(field_path.last);
                 field_path.path[0] += data.read_bits(3) as i32 + 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopAllButOnePlusNPack6Bits",
@@ -388,6 +422,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.pop(field_path.last);
                 field_path.path[0] += data.read_bits(6) as i32 + 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopNPlusOne",
@@ -396,6 +431,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.pop(data.read_varbit_field_path().unwrap());
                 field_path.path[field_path.last as usize] += 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopNPlusN",
@@ -404,6 +440,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                 field_path.pop(data.read_varbit_field_path().unwrap());
                 field_path.path[field_path.last as usize] += data.read_varint_i32().unwrap() as i32;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "PopNAndNonTopographical",
@@ -416,6 +453,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                     }
                 }
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "NonTopoComplex",
@@ -427,6 +465,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                     }
                 }
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "NonTopoPenultimatePlusOne",
@@ -434,6 +473,7 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
             operation: |_data, field_path| {
                 field_path.path[field_path.last as usize - 1] += 1;
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "NonTopoComplexPack4Bits",
@@ -445,13 +485,13 @@ static HUFFMAN_TREE: Lazy<Node<FieldPathOperation>> = Lazy::new(|| {
                     }
                 }
             },
+            is_final: false,
         },
         FieldPathOperation {
             name: "FieldPathEnweightFinish",
             weight: 25474,
-            operation: |_data, field_path| {
-                field_path.done = true;
-            },
+            operation: |_data, _field_path| {},
+            is_final: true,
         },
     ])
 });

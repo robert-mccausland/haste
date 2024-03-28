@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::{array, mem::MaybeUninit};
 
 use crate::{
     decoders::Bits,
@@ -9,15 +6,16 @@ use crate::{
         field_decoders::{decode_field, decode_field_by_type, read_boolean, read_unsigned},
         Class, Entity, FieldPath, FieldValue, Serializer,
     },
-    utils, Result,
+    Result,
 };
 
+use fxhash::FxHashMap;
 use once_cell::sync::Lazy;
 
 use super::{bits::BitReader, field_paths::read_field_paths};
 
-static POINTER_TYPES: Lazy<HashSet<&str>> = Lazy::new(|| {
-    HashSet::from([
+static POINTER_TYPES: Lazy<[&str; 11]> = Lazy::new(|| {
+    [
         "PhysicsRagdollPose_t",
         "CBodyComponent",
         "CEntityIdentity",
@@ -29,37 +27,33 @@ static POINTER_TYPES: Lazy<HashSet<&str>> = Lazy::new(|| {
         "CPlayerLocalData",
         "CPlayer_CameraServices",
         "CDOTAGameRules",
-    ])
+    ]
 });
 
-static VARIABLE_ARRAY_TYPES: Lazy<HashSet<&str>> =
-    Lazy::new(|| HashSet::from(["CUtlVector", "CNetworkUtlVectorBase"]));
+static VARIABLE_ARRAY_TYPES: Lazy<[&str; 2]> =
+    Lazy::new(|| ["CUtlVector", "CNetworkUtlVectorBase"]);
 
 pub struct EntityReader<'a> {
     current_index: i32,
     class_id_size: usize,
-    classes: &'a HashMap<u32, Class>,
-    serializers: &'a HashMap<String, HashMap<i32, Serializer>>,
-    baselines: &'a HashMap<u32, Rc<[u8]>>,
-    entities: &'a mut HashMap<u32, Entity>,
+    classes: &'a FxHashMap<u32, Class>,
+    entities: &'a mut FxHashMap<u32, Entity>,
+    paths_cache: [MaybeUninit<FieldPath>; 2048],
 }
 
 impl<'a> EntityReader<'a> {
     pub fn new(
         max_classes: u32,
-        classes: &'a HashMap<u32, Class>,
-        serializers: &'a HashMap<String, HashMap<i32, Serializer>>,
-        baselines: &'a HashMap<u32, Rc<[u8]>>,
-        entities: &'a mut HashMap<u32, Entity>,
+        classes: &'a FxHashMap<u32, Class>,
+        entities: &'a mut FxHashMap<u32, Entity>,
     ) -> Self {
         let class_id_size = (max_classes as f64).log2().ceil() as usize;
         Self {
             current_index: -1,
             class_id_size,
             classes,
-            serializers,
-            baselines,
             entities,
+            paths_cache: unsafe { MaybeUninit::uninit().assume_init() },
         }
     }
 
@@ -97,24 +91,9 @@ impl<'a> EntityReader<'a> {
                     active: true,
                 };
 
-                let serializer = utils::expect_one(
-                    self.serializers
-                        .get(&class.name)
-                        .ok_or_else(|| {
-                            format!("unable to find serializer for class: '{:}'", &class.name)
-                        })?
-                        .iter(),
-                )?
-                .1;
-
-                let baseline_data = self
-                    .baselines
-                    .get(&class.id)
-                    .ok_or_else(|| format!("unable to find baseline for class: '{}'", &class.name))?
-                    .as_ref();
-                let mut baseline = BitReader::new(baseline_data);
-                self.read_fields(&mut baseline, serializer)?;
-                self.read_fields(data, serializer)?;
+                let mut baseline = BitReader::new(&class.baseline);
+                self.read_fields(&mut baseline, class.serializer.as_ref())?;
+                self.read_fields(data, class.serializer.as_ref())?;
                 self.entities.insert(self.current_index.try_into()?, entity);
             } else {
                 let entity = self
@@ -129,17 +108,7 @@ impl<'a> EntityReader<'a> {
                     .get(&entity.class_id)
                     .ok_or_else(|| format!("class {} not found", &entity.class_id))?;
 
-                let serializer = utils::expect_one(
-                    self.serializers
-                        .get(&class.name)
-                        .ok_or_else(|| {
-                            format!("unable to find serializer for class: '{}'", &class.name)
-                        })?
-                        .iter(),
-                )?
-                .1;
-
-                self.read_fields(data, serializer)?;
+                self.read_fields(data, class.serializer.as_ref())?;
             }
         } else {
             let entity = self
@@ -161,9 +130,12 @@ impl<'a> EntityReader<'a> {
     }
 
     fn read_fields<'b>(&mut self, data: &'b mut BitReader, serializer: &Serializer) -> Result<()> {
-        for field_path in read_field_paths(data) {
-            let _value = self.parse_field(data, serializer, &field_path, 0)?;
+        let count = read_field_paths(data, &mut self.paths_cache);
 
+        for index in 0..count {
+            let field_path = unsafe { self.paths_cache[index].assume_init_ref() };
+            let _value = Self::parse_field(data, serializer, field_path, 0)?;
+            unsafe { self.paths_cache[index].assume_init_drop() };
             //println!("{:?}", value);
 
             // TODO actually use this value...
@@ -180,7 +152,6 @@ impl<'a> EntityReader<'a> {
     // referencing them by name
     // - Maybe we even need a better way of deciding how to decode the different types of values
     fn parse_field(
-        &mut self,
         data: &mut BitReader,
         serializer: &Serializer,
         field_path: &FieldPath,
@@ -191,45 +162,35 @@ impl<'a> EntityReader<'a> {
         let field = serializer.fields.get(index).unwrap();
 
         // Conditional logic based on the field (this is kind ugly...)
-        if field.serializer_name != "" {
+        if field.serializer.is_some() {
             if field.field_type.pointer
-                || HashSet::contains(&POINTER_TYPES, field.field_type.base_type.as_str())
+                || POINTER_TYPES.contains(&field.field_type.base_type.as_str())
             {
                 if field_path.last == position as i32 {
                     return Ok(read_boolean(data));
                 } else {
-                    let serializer = self
-                        .serializers
-                        .get(&field.serializer_name)
-                        .and_then(|s| s.get(&field.serializer_version))
-                        .ok_or_else(|| {
-                            format!(
-                                "unable to find serializer: '{:}@{:}'",
-                                &field.serializer_name, &field.serializer_version
-                            )
-                        })?;
-                    return self.parse_field(data, serializer, field_path, position + 1);
+                    return Self::parse_field(
+                        data,
+                        field.serializer.as_ref().unwrap(),
+                        field_path,
+                        position + 1,
+                    );
                 }
             } else {
                 if field_path.last >= position as i32 + 2 {
-                    let serializer = self
-                        .serializers
-                        .get(&field.serializer_name)
-                        .and_then(|s| s.get(&field.serializer_version))
-                        .ok_or_else(|| {
-                            format!(
-                                "unable to find serializer: '{:}@{:}'",
-                                &field.serializer_name, &field.serializer_version
-                            )
-                        })?;
-                    return self.parse_field(data, serializer, field_path, position + 2);
+                    return Self::parse_field(
+                        data,
+                        field.serializer.as_ref().unwrap(),
+                        field_path,
+                        position + 2,
+                    );
                 } else {
                     return read_unsigned(data);
                 }
             }
         } else if field.field_type.count > 0 && field.field_type.base_type != "char" {
             return decode_field(data, field.as_ref());
-        } else if HashSet::contains(&VARIABLE_ARRAY_TYPES, field.field_type.base_type.as_str()) {
+        } else if VARIABLE_ARRAY_TYPES.contains(&field.field_type.base_type.as_str()) {
             if field_path.last == position as i32 + 1 {
                 return decode_field_by_type(
                     data,

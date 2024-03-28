@@ -1,13 +1,14 @@
 use std::{collections::HashMap, rc::Rc};
 
+use fxhash::FxHashMap;
 use haste_protobuf::dota::{self, CsvcMsgFlattenedSerializer};
 use prost::Message;
 
 use crate::{
     decoders::Bits,
-    readers::{bits::BitReader, entities::EntityReader, serializers::SerializerReader},
+    readers::{bits::BitReader, entities::EntityReader, serializers::read_serializers},
     string_tables::StringTable,
-    Result,
+    utils, Result,
 };
 
 pub mod field_decoders;
@@ -17,12 +18,8 @@ mod quantized_float_decoder;
 pub struct Class {
     pub id: u32,
     pub name: String,
-}
-
-impl Class {
-    fn new(id: u32, name: String) -> Self {
-        Self { id, name }
-    }
+    pub serializer: Rc<Serializer>,
+    pub baseline: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -42,8 +39,7 @@ pub struct Field {
     pub low_value: Option<f32>,
     pub high_value: Option<f32>,
     pub field_type: FieldType,
-    pub serializer_name: String,
-    pub serializer_version: i32,
+    pub serializer: Option<Rc<Serializer>>,
 }
 
 #[derive(Debug, Clone)]
@@ -77,7 +73,6 @@ pub struct Entity {
 pub struct FieldPath {
     pub path: [i32; 7],
     pub last: i32,
-    pub done: bool,
 }
 
 impl FieldPath {
@@ -90,33 +85,37 @@ impl FieldPath {
 }
 
 pub struct Entities {
-    baselines: HashMap<u32, Rc<[u8]>>,
     max_classes: u32,
-    classes: HashMap<u32, Class>,
-    class_names: HashMap<String, u32>,
-    serializers: HashMap<String, HashMap<i32, Serializer>>,
-    entities: HashMap<u32, Entity>,
     full_entity_packet_count: u32,
+    classes: FxHashMap<u32, Class>,
+    entities: FxHashMap<u32, Entity>,
+    serializers: HashMap<String, HashMap<i32, Rc<Serializer>>>,
 }
 
 impl Entities {
     pub fn new() -> Self {
         Self {
-            baselines: HashMap::new(),
             max_classes: 0,
-            classes: HashMap::new(),
-            serializers: HashMap::new(),
-            entities: HashMap::new(),
-            class_names: HashMap::new(),
             full_entity_packet_count: 0,
+            classes: FxHashMap::default(),
+            entities: FxHashMap::default(),
+            serializers: HashMap::new(),
         }
     }
 
     pub fn update_baselines(&mut self, baselines: &StringTable) -> Result<()> {
+        // Skip this if we have not had any class data yet
+        if self.classes.len() == 0 {
+            return Ok(());
+        }
+
         for baseline in baselines.get_entries() {
-            let data = Rc::from(baseline.data.clone());
-            self.baselines
-                .insert(u32::from_str_radix(baseline.name, 10)?, data);
+            let class = self
+                .classes
+                .get_mut(&u32::from_str_radix(baseline.name, 10)?)
+                .ok_or("could not find class")?;
+
+            class.baseline = baseline.data.clone();
         }
 
         Ok(())
@@ -129,8 +128,19 @@ impl Entities {
     pub fn on_class_info(&mut self, class_info: dota::CDemoClassInfo) -> Result<()> {
         for class in class_info.classes {
             let id = class.class_id.ok_or("class did not have id")?.try_into()?;
-            let class = Class::new(id, class.network_name.ok_or("class did not have name")?);
-            self.class_names.insert(class.name.to_owned(), id);
+            let name = class.network_name.ok_or("class did not have name")?;
+            let class = Class {
+                id,
+                serializer: utils::expect_one(
+                    self.serializers
+                        .get(&name)
+                        .ok_or("could not find class serializer")?
+                        .values(),
+                )?
+                .clone(),
+                baseline: vec![],
+                name,
+            };
             self.classes.insert(id, class);
         }
 
@@ -140,16 +150,9 @@ impl Entities {
     pub fn on_send_tables(&mut self, send_tables: dota::CDemoSendTables) -> Result<()> {
         let mut data = BitReader::new(send_tables.data());
         let size = data.read_varint_u32()?;
-        let mut reader = SerializerReader::new(CsvcMsgFlattenedSerializer::decode(
+        self.serializers = read_serializers(&CsvcMsgFlattenedSerializer::decode(
             data.read_bytes(size.try_into()?).as_slice(),
-        )?);
-
-        while let Some(serializer) = reader.read_next_serializer()? {
-            self.serializers
-                .entry(serializer.name.to_owned())
-                .or_insert_with(|| HashMap::new())
-                .insert(serializer.version, serializer);
-        }
+        )?)?;
 
         Ok(())
     }
@@ -170,13 +173,8 @@ impl Entities {
             self.full_entity_packet_count += 1;
         }
 
-        let mut entity_reader = EntityReader::new(
-            self.max_classes,
-            &self.classes,
-            &self.serializers,
-            &self.baselines,
-            &mut self.entities,
-        );
+        let mut entity_reader =
+            EntityReader::new(self.max_classes, &self.classes, &mut self.entities);
 
         entity_reader.read_entities(
             packet_entities.entity_data(),

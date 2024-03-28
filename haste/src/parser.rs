@@ -13,7 +13,7 @@ use crate::{
 };
 
 const SIGNATURE: &[u8] = b"PBDEMS2\0";
-const INSTANCE_BASELINE_STRING_TABLE_NAME: &str = "instancebaseline";
+const BASELINES_TABLE_NAME: &str = "instancebaseline";
 
 const DEMOS_INTERNALLY_HANDLED: &[DemoKind] = &[
     DemoKind::Packet,
@@ -119,7 +119,16 @@ impl<T: EventHandler> Parser<T> {
                         self.handle_packet(packet)?
                     }
                 }
-                Demo::ClassInfo(class_info) => self.context.entities.on_class_info(class_info)?,
+                Demo::ClassInfo(class_info) => {
+                    self.context.entities.on_class_info(class_info)?;
+                    if let Some(baseline_table) =
+                        self.context.string_table_names.get(BASELINES_TABLE_NAME)
+                    {
+                        self.context
+                            .entities
+                            .update_baselines(&self.context.string_tables[*baseline_table])?;
+                    }
+                }
                 Demo::SendTables(send_tables) => {
                     self.context.entities.on_send_tables(send_tables)?
                 }
@@ -188,7 +197,7 @@ impl<T: EventHandler> Parser<T> {
             self.context.string_tables.len(),
         );
 
-        if string_table.get_name() == INSTANCE_BASELINE_STRING_TABLE_NAME {
+        if string_table.get_name() == BASELINES_TABLE_NAME {
             self.context.entities.update_baselines(&string_table)?;
         }
 
@@ -208,7 +217,7 @@ impl<T: EventHandler> Parser<T> {
                 message.num_changed_entries().try_into()?,
             )?;
 
-            if string_table.get_name() == INSTANCE_BASELINE_STRING_TABLE_NAME {
+            if string_table.get_name() == BASELINES_TABLE_NAME {
                 self.context.entities.update_baselines(string_table)?;
             }
         }
