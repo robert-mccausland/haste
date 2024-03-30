@@ -1,18 +1,17 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use fxhash::FxHashMap;
 use haste_protobuf::dota::{self, CsvcMsgFlattenedSerializer};
 use prost::Message;
 
-use crate::{
-    decoders::Bits,
-    readers::{bits::BitReader, entities::EntityReader, serializers::read_serializers},
-    string_tables::StringTable,
-    utils, Result,
-};
+use crate::{decoders::Bits, readers::bits::BitReader, string_tables::StringTable, utils, Result};
 
-pub mod field_decoders;
-mod quantized_float_decoder;
+use self::{entity_reader::EntityReader, field_paths::FieldPath, serializers::read_serializers};
+
+mod entity_reader;
+mod field_decoders;
+mod field_paths;
+mod serializers;
 
 #[derive(Debug, Clone)]
 pub struct Class {
@@ -29,10 +28,9 @@ pub struct Serializer {
     pub fields: Vec<Rc<Field>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Field {
     pub var_name: String,
-    pub send_node: String,
     pub encoder: String,
     pub encode_flags: u32,
     pub bit_count: u32,
@@ -40,9 +38,19 @@ pub struct Field {
     pub high_value: Option<f32>,
     pub field_type: FieldType,
     pub serializer: Option<Rc<Serializer>>,
+    pub model: FieldModel,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+pub enum FieldModel {
+    FixedTable,
+    VariableTable,
+    FixedArray,
+    VariableArray,
+    Simple,
+}
+
+#[derive(Debug)]
 pub struct FieldType {
     pub base_type: String,
     pub generic_type: Option<Box<FieldType>>,
@@ -52,6 +60,7 @@ pub struct FieldType {
 
 #[derive(Debug, Clone)]
 pub enum FieldValue {
+    Empty,
     Boolean(bool),
     String(String),
     Unsigned32(u32),
@@ -66,28 +75,87 @@ pub enum FieldValue {
 pub struct Entity {
     pub serial: u32,
     pub active: bool,
-    pub class_id: u32,
+    pub class: Rc<RefCell<Class>>,
+    pub fields: Vec<FieldState>,
 }
 
-#[derive(Debug, Clone)]
-pub struct FieldPath {
-    pub path: [i32; 7],
-    pub last: i32,
-}
+impl Entity {
+    pub fn get_field(&self, mut path: Vec<&str>) -> Option<&FieldValue> {
+        path.reverse();
+        self.get_field_recursive(path, &self.fields, &self.class.borrow().serializer)
+    }
 
-impl FieldPath {
-    pub fn pop(&mut self, n: i32) {
-        for _ in 0..n {
-            self.path[self.last as usize] = 0;
-            self.last -= 1;
+    fn get_field_recursive<'a>(
+        &self,
+        mut path: Vec<&str>,
+        fields: &'a Vec<FieldState>,
+        serializer: &Serializer,
+    ) -> Option<&'a FieldValue> {
+        let field_name = path.pop()?;
+        let field = serializer
+            .fields
+            .iter()
+            .enumerate()
+            .find(|(_index, field)| field.var_name == field_name);
+
+        if let Some((index, field)) = field {
+            let field_value = &fields[index];
+            if path.len() == 0 {
+                field_value.value.as_ref()
+            } else {
+                self.get_field_recursive(
+                    path,
+                    field_value.children.as_ref()?,
+                    field.serializer.as_ref()?,
+                )
+            }
+        } else {
+            None
         }
     }
+
+    pub fn dump_fields(&self) {
+        self.dump_fields_recursive(&self.fields, &self.class.borrow().serializer, Vec::new());
+    }
+
+    fn dump_fields_recursive<'a>(
+        &self,
+        fields: &Vec<FieldState>,
+        serializer: &'a Serializer,
+        mut prefixes: Vec<&'a str>,
+    ) -> Vec<&'a str> {
+        for index in 0..serializer.fields.len() {
+            let field = &serializer.fields[index];
+            if fields.len() <= index {
+                continue;
+            }
+
+            prefixes.push(field.var_name.as_str());
+            if let Some(value) = fields[index].value.as_ref() {
+                println!("{:}: {:?}", prefixes.join("."), value)
+            }
+            if let Some(child_fields) = fields[index].children.as_ref() {
+                if let Some(serializer) = field.serializer.as_ref() {
+                    prefixes = self.dump_fields_recursive(child_fields, serializer, prefixes);
+                }
+            }
+            prefixes.pop();
+        }
+
+        prefixes
+    }
+}
+
+#[derive(Debug)]
+pub struct FieldState {
+    pub value: Option<FieldValue>,
+    pub children: Option<Vec<FieldState>>,
 }
 
 pub struct Entities {
     max_classes: u32,
     full_entity_packet_count: u32,
-    classes: FxHashMap<u32, Class>,
+    classes: FxHashMap<u32, Rc<RefCell<Class>>>,
     entities: FxHashMap<u32, Entity>,
     serializers: HashMap<String, HashMap<i32, Rc<Serializer>>>,
 }
@@ -103,6 +171,10 @@ impl Entities {
         }
     }
 
+    pub fn get(&self, entity_id: u32) -> Option<&Entity> {
+        self.entities.get(&entity_id)
+    }
+
     pub fn update_baselines(&mut self, baselines: &StringTable) -> Result<()> {
         // Skip this if we have not had any class data yet
         if self.classes.len() == 0 {
@@ -112,10 +184,12 @@ impl Entities {
         for baseline in baselines.get_entries() {
             let class = self
                 .classes
-                .get_mut(&u32::from_str_radix(baseline.name, 10)?)
+                .get_mut(&u32::from_str_radix(baseline.name, 10).map_err(|_err| {
+                    format!("invalid class id in baseline table: {:}", baseline.name)
+                })?)
                 .ok_or("could not find class")?;
 
-            class.baseline = baseline.data.clone();
+            class.borrow_mut().baseline = baseline.data.clone();
         }
 
         Ok(())
@@ -129,7 +203,7 @@ impl Entities {
         for class in class_info.classes {
             let id = class.class_id.ok_or("class did not have id")?.try_into()?;
             let name = class.network_name.ok_or("class did not have name")?;
-            let class = Class {
+            let class = Rc::from(RefCell::from(Class {
                 id,
                 serializer: utils::expect_one(
                     self.serializers
@@ -140,7 +214,7 @@ impl Entities {
                 .clone(),
                 baseline: vec![],
                 name,
-            };
+            }));
             self.classes.insert(id, class);
         }
 
@@ -165,22 +239,26 @@ impl Entities {
     pub fn on_packet_entities(
         &mut self,
         packet_entities: dota::CsvcMsgPacketEntities,
-    ) -> Result<()> {
+    ) -> Result<Vec<i32>> {
         if !packet_entities.legacy_is_delta() {
             if self.full_entity_packet_count > 0 {
-                return Ok(());
+                return Ok(Vec::new());
             }
             self.full_entity_packet_count += 1;
         }
 
-        let mut entity_reader =
-            EntityReader::new(self.max_classes, &self.classes, &mut self.entities);
-
-        entity_reader.read_entities(
+        let mut entity_reader = EntityReader::new(
+            self.max_classes,
+            &self.classes,
+            &mut self.entities,
             packet_entities.entity_data(),
-            packet_entities.updated_entries().try_into()?,
-        )?;
+        );
 
-        Ok(())
+        let mut result = Vec::new();
+        for _ in 0..packet_entities.updated_entries() {
+            result.push(entity_reader.read_next_entity()?);
+        }
+
+        Ok(result)
     }
 }

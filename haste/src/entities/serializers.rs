@@ -10,6 +10,22 @@ use crate::{
     Result,
 };
 
+use super::FieldModel;
+
+static POINTER_TYPES: [&str; 11] = [
+    "PhysicsRagdollPose_t",
+    "CBodyComponent",
+    "CEntityIdentity",
+    "CPhysicsComponent",
+    "CRenderComponent",
+    "CDOTAGamerules",
+    "CDOTAGameManager",
+    "CDOTASpectatorGraphManager",
+    "CPlayerLocalData",
+    "CPlayer_CameraServices",
+    "CDOTAGameRules",
+];
+
 pub fn read_serializers(
     data: &CsvcMsgFlattenedSerializer,
 ) -> Result<HashMap<String, HashMap<i32, Rc<Serializer>>>> {
@@ -46,7 +62,7 @@ pub fn read_serializers(
 fn create_field(
     data: &CsvcMsgFlattenedSerializer,
     field_index: i32,
-    serializers: &mut HashMap<String, HashMap<i32, Rc<Serializer>>>,
+    serializers: &HashMap<String, HashMap<i32, Rc<Serializer>>>,
 ) -> Result<Field> {
     let f = data
         .fields
@@ -57,14 +73,19 @@ fn create_field(
         get_symbol_name(data, f.var_type_sym.ok_or("no variable type")?)?.as_str(),
     )?;
 
-    // TODO - might need to default "(root)" to an empty string here???
-    let send_node = f
-        .var_name_sym
-        .map_or(Ok("".to_owned()), |index| get_symbol_name(data, index))?;
-
+    let serializer = match f.field_serializer_name_sym {
+        Some(symbol) => Some(
+            serializers
+                .get(&get_symbol_name(data, symbol)?)
+                .ok_or("could not find serializer")?
+                .get(&f.field_serializer_version())
+                .ok_or("could not find serializer version")?
+                .clone(),
+        ),
+        None => None,
+    };
     Ok(Field {
         var_name: get_symbol_name(data, f.var_name_sym.ok_or("no variable name")?)?,
-        send_node: send_node,
         encoder: f
             .var_encoder_sym
             .map_or(Ok("".to_owned()), |index| get_symbol_name(data, index))?,
@@ -72,18 +93,9 @@ fn create_field(
         bit_count: f.bit_count.unwrap_or_default().try_into()?,
         low_value: f.low_value,
         high_value: f.high_value,
+        model: get_field_model(serializer.is_some(), &field_type),
         field_type: field_type,
-        serializer: match f.field_serializer_name_sym {
-            Some(symbol) => Some(
-                serializers
-                    .get(&get_symbol_name(data, symbol)?)
-                    .ok_or("could not find serializer")?
-                    .get(&f.field_serializer_version())
-                    .ok_or("could not find serializer version")?
-                    .clone(),
-            ),
-            None => None,
-        },
+        serializer,
     })
 }
 
@@ -107,8 +119,8 @@ fn parse_field_type(name: &str) -> Result<FieldType> {
         .captures(name)
         .ok_or("field type did not match expected regex")?;
 
+    let base_type = captures.get(1).unwrap().as_str();
     return Ok(FieldType {
-        base_type: captures.get(1).unwrap().as_str().to_owned(),
         generic_type: if captures.get(3).is_none() {
             None
         } else {
@@ -116,7 +128,7 @@ fn parse_field_type(name: &str) -> Result<FieldType> {
                 captures.get(3).unwrap().as_str(),
             )?))
         },
-        pointer: captures.get(4).is_some(),
+        pointer: captures.get(4).is_some() || POINTER_TYPES.contains(&base_type),
         count: if captures.get(6).is_none() {
             0
         } else if let Some(count) = ITEM_COUNTS.get(captures.get(6).unwrap().as_str()) {
@@ -126,5 +138,24 @@ fn parse_field_type(name: &str) -> Result<FieldType> {
         } else {
             1024
         },
+        base_type: base_type.to_owned(),
     });
+}
+
+fn get_field_model(has_serializer: bool, field_type: &FieldType) -> FieldModel {
+    if has_serializer {
+        if field_type.pointer {
+            FieldModel::FixedTable
+        } else {
+            FieldModel::VariableTable
+        }
+    } else if field_type.count > 0 && field_type.base_type != "char" {
+        FieldModel::FixedArray
+    } else if field_type.base_type == "CUtilVector"
+        || field_type.base_type == "CNetworkUtlVectorBase"
+    {
+        FieldModel::VariableArray
+    } else {
+        FieldModel::Simple
+    }
 }

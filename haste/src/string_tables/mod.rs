@@ -1,7 +1,87 @@
+mod reader;
+
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::{readers::string_tables::StringTableReader, Result};
+use haste_protobuf::dota::{CsvcMsgCreateStringTable, CsvcMsgUpdateStringTable};
+
+use crate::Result;
+
+use self::reader::StringTableReader;
+
+pub struct StringTables {
+    string_tables: Vec<StringTable>,
+    string_table_names: HashMap<String, usize>,
+}
+
+impl StringTables {
+    pub fn new() -> Self {
+        Self {
+            string_tables: Vec::new(),
+            string_table_names: HashMap::new(),
+        }
+    }
+
+    pub fn get_by_name(&self, name: &str) -> Option<&StringTable> {
+        let position = self.string_table_names.get(name);
+        return position.map(|position| self.string_tables.get(*position).unwrap());
+    }
+
+    pub fn get(&self, id: usize) -> Option<&StringTable> {
+        self.string_tables.get(id)
+    }
+
+    pub fn on_create_string_table(&mut self, message: CsvcMsgCreateStringTable) -> Result<()> {
+        let table_name = message
+            .name
+            .as_ref()
+            .ok_or("string table did not have a name")?;
+        if self.string_table_names.contains_key(table_name.as_str()) {
+            return Err(format!("string table {:} already exists", table_name.as_str()).into());
+        }
+
+        let mut string_table = StringTable::new(
+            table_name.to_owned(),
+            message
+                .user_data_fixed_size()
+                .then_some(message.user_data_size_bits().try_into()?),
+            message.using_varint_bitcounts(),
+            message.flags().try_into()?,
+        );
+
+        let data = if message.data_compressed() {
+            snap::raw::Decoder::new().decompress_vec(message.string_data())?
+        } else {
+            message.string_data.unwrap_or_default()
+        };
+
+        string_table.update_entries(
+            data.as_slice(),
+            message.num_entries.unwrap_or_default().try_into()?,
+        )?;
+
+        self.string_table_names
+            .insert(message.name.unwrap(), self.string_tables.len());
+
+        self.string_tables.push(string_table);
+
+        Ok(())
+    }
+
+    pub fn on_update_string_table(&mut self, message: CsvcMsgUpdateStringTable) -> Result<()> {
+        if let Some(string_table) = self
+            .string_tables
+            .get_mut(TryInto::<usize>::try_into(message.table_id())?)
+        {
+            string_table.update_entries(
+                message.string_data(),
+                message.num_changed_entries().try_into()?,
+            )?;
+        }
+
+        Ok(())
+    }
+}
 
 pub struct StringTable {
     name: String,
@@ -70,7 +150,7 @@ impl StringTable {
             .collect()
     }
 
-    pub(crate) fn update_entries(&mut self, data: &[u8], count: usize) -> Result<()> {
+    pub fn update_entries(&mut self, data: &[u8], count: usize) -> Result<()> {
         let reader = StringTableReader::new(
             data,
             count,

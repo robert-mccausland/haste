@@ -1,9 +1,4 @@
-
-
-use crate::decoders::Bits;
-use crate::Result;
-
-use super::bits::BitReader;
+use crate::{decoders::Bits, readers::bits::BitReader, Result};
 
 const KEY_HISTORY_BITS: usize = 5;
 const KEY_HISTORY_SIZE: usize = 1 << KEY_HISTORY_BITS;

@@ -1,5 +1,3 @@
-
-
 use crate::{decoders::Bits, readers::bits::BitReader, Result};
 
 pub struct QuantizedFloatDecoder {
