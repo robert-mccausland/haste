@@ -1,7 +1,5 @@
-use haste::{
-    parser::{EventHandler, Parser, ParserContext},
-    protos::{dota::DotaCombatlogTypes, Packet, PacketKind},
-};
+use haste::parser::{EventHandler, Parser, ParserContext};
+use haste_protobuf::{dota::DotaCombatlogTypes, Packet, PacketKind};
 use std::{fs::File, io::Write, time::Instant};
 
 fn main() {
@@ -9,12 +7,12 @@ fn main() {
     let replay_file_path =
         "H:\\SteamLibrary\\steamapps\\common\\dota 2 beta\\game\\dota\\replays\\7588607085.dem";
     let mut file = File::open(replay_file_path).unwrap();
-    let handler = CombatLogHandler {
-        output: std::io::stdout(),
+    let mut handler = CombatLogHandler {
+        output: File::create("./combat-log.txt").unwrap(),
     };
     let start = Instant::now();
-    Parser::new(handler, &[], &[PacketKind::CombatLogData])
-        .parse(&mut file)
+    Parser::new(&[], &[PacketKind::CombatLogData], false)
+        .parse(&mut file, &mut handler)
         .unwrap();
     let duration = Instant::now().duration_since(start);
     eprintln!("Parsing took {:?}", duration);
@@ -29,7 +27,7 @@ const DEFAULT_NAME: &str = "NULL";
 impl<W: Write> EventHandler for CombatLogHandler<W> {
     fn on_packet(&mut self, demo: Packet, context: &ParserContext) -> haste::Result<()> {
         if let Packet::CombatLogData(entry) = demo {
-            let combat_log_names = context.get_string_table_by_name("CombatLogNames");
+            let combat_log_names = context.string_tables.get_by_name("CombatLogNames");
             let get_name = |index: u32| -> &str {
                 combat_log_names
                     .and_then(|names| names.get_entry(index).map(|entry| entry.name))

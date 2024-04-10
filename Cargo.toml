@@ -1,20 +1,6 @@
-[package]
-name = "haste"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-crate-type = ["lib"]
+[workspace]
+members = ["haste", "haste-protobuf"]
+resolver = "2"
 
 [profile.release]
 debug = true
-
-
-[dependencies]
-bytes = "1.5.0"
-prost = "0.12.3"
-snap = "1.1.1"
-
-[build-dependencies]
-glob = "0.3.1"
-prost-build = "0.12.3"
