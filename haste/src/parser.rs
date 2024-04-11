@@ -24,11 +24,16 @@ pub trait EventHandler {
     fn on_entity_changed(&mut self, _entity: &Entity, _context: &ParserContext) -> Result<()> {
         Ok(())
     }
+
+    fn should_continue(&mut self) -> Result<bool> {
+        Ok(true)
+    }
 }
 
 pub struct ParserContext {
     pub entities: Entities,
     pub string_tables: StringTables,
+    pub current_tick: i32,
 }
 
 pub struct Parser {
@@ -36,8 +41,6 @@ pub struct Parser {
     demos_handled: Vec<DemoKind>,
     packets_handled: Vec<PacketKind>,
 }
-
-impl ParserContext {}
 
 impl Parser {
     pub fn new(
@@ -49,6 +52,7 @@ impl Parser {
             context: ParserContext {
                 entities: Entities::new(),
                 string_tables: StringTables::new(),
+                current_tick: 0,
             },
             demos_handled: Vec::from_iter(
                 demos_handled
@@ -87,6 +91,7 @@ impl Parser {
         let reader = DemoReader::new(data, self.demos_handled.to_owned());
         for message in reader {
             let message = message?;
+            self.context.current_tick = message.tick;
             match message.content {
                 Demo::SignOnPacket(packet) => self.handle_packet(packet, event_handler)?,
                 Demo::Packet(packet) => self.handle_packet(packet, event_handler)?,
@@ -109,6 +114,10 @@ impl Parser {
                     self.context.entities.on_send_tables(send_tables)?
                 }
                 demo => event_handler.on_demo(demo, &self.context)?,
+            }
+
+            if !event_handler.should_continue()? {
+                return Ok(());
             }
         }
 

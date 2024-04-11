@@ -23,7 +23,7 @@ pub fn decode_field(data: &mut BitReader, field: &Field) -> Result<FieldValue> {
         "Vector4D" => return Ok(FieldValue::Vector4(decode_vector4(data, field)?)),
         "uint64" | "CStrongHandle" => return Ok(FieldValue::Unsigned64(decode_u64(data, field)?)),
         "QAngle" => return Ok(FieldValue::Vector3(decode_q_angle(data, field))),
-        "CEntityHandle" | "CHandle" => return Ok(FieldValue::Unsigned32(data.read_varint_u32()?)),
+        "CEntityHandle" | "CHandle" => return decode_unsigned(data),
         _ => {}
     }
 
@@ -36,10 +36,12 @@ pub fn decode_field_by_type(data: &mut BitReader, field_type: &str) -> Result<Fi
             Ok(FieldValue::Boolean(data.read_boolean()))
         }
         "char" | "CUtlString" | "CUtlSymbolLarge" => Ok(FieldValue::String(data.read_string()?)),
-        "int16" | "int32" | "int64" => Ok(FieldValue::Signed32(data.read_varint_i32()?)),
+        "int16" | "int32" | "int64" | "AbilityID_t" | "PlayerID_t" => {
+            Ok(FieldValue::Signed32(data.read_varint_i32()?))
+        }
         "GameTime_t" => Ok(FieldValue::Float(decode_f32_no_scale(data))),
         "MatchID_t" | "itemid_t" => Ok(FieldValue::Unsigned64(data.read_varint_u64()?)),
-        _ => Ok(FieldValue::Unsigned32(data.read_varint_u32()?)),
+        _ => decode_unsigned(data),
     }
 }
 
@@ -48,5 +50,6 @@ pub fn decode_boolean(data: &mut BitReader) -> FieldValue {
 }
 
 pub fn decode_unsigned(data: &mut BitReader) -> Result<FieldValue> {
-    Ok(FieldValue::Unsigned32(data.read_varint_u32()?))
+    let value = data.read_varint_u32()?;
+    return Ok(FieldValue::Unsigned32(value));
 }

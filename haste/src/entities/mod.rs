@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, f64::consts::E, fmt::Debug, ops::Deref, rc::Rc};
 
 use fxhash::FxHashMap;
 use haste_protobuf::dota::{self, CsvcMsgFlattenedSerializer};
@@ -72,6 +72,7 @@ pub enum FieldValue {
     Vector4((f32, f32, f32, f32)),
 }
 
+#[derive(Debug, Clone)]
 pub struct Entity {
     pub serial: u32,
     pub active: bool,
@@ -103,11 +104,19 @@ impl Entity {
             if path.len() == 0 {
                 field_value.value.as_ref()
             } else {
-                self.get_field_recursive(
-                    path,
-                    field_value.children.as_ref()?,
-                    field.serializer.as_ref()?,
-                )
+                let serializer = field.serializer.as_ref()?;
+                let children = field_value.children.as_ref()?;
+                if field.field_type.count != 0 {
+                    let index = path.pop().unwrap().parse::<usize>().ok()?;
+                    let state = children.get(index)?;
+                    if path.len() == 0 {
+                        state.value.as_ref()
+                    } else {
+                        self.get_field_recursive(path, state.children.as_ref()?, serializer)
+                    }
+                } else {
+                    self.get_field_recursive(path, children, serializer)
+                }
             }
         } else {
             None
@@ -118,25 +127,55 @@ impl Entity {
         self.dump_fields_recursive(&self.fields, &self.class.borrow().serializer, Vec::new());
     }
 
-    fn dump_fields_recursive<'a>(
+    fn dump_fields_recursive(
         &self,
         fields: &Vec<FieldState>,
-        serializer: &'a Serializer,
-        mut prefixes: Vec<&'a str>,
-    ) -> Vec<&'a str> {
+        serializer: &Serializer,
+        mut prefixes: Vec<String>,
+    ) -> Vec<String> {
         for index in 0..serializer.fields.len() {
             let field = &serializer.fields[index];
             if fields.len() <= index {
                 continue;
             }
 
-            prefixes.push(field.var_name.as_str());
-            if let Some(value) = fields[index].value.as_ref() {
-                println!("{:}: {:?}", prefixes.join("."), value)
+            if field.var_name == "m_AbilityDraftAbilities" {
+                println!("here")
             }
+            prefixes.push(field.var_name.to_owned());
+            println!(
+                "{:}: {:?}",
+                prefixes.join("."),
+                fields[index].value.as_ref()
+            );
+
             if let Some(child_fields) = fields[index].children.as_ref() {
                 if let Some(serializer) = field.serializer.as_ref() {
-                    prefixes = self.dump_fields_recursive(child_fields, serializer, prefixes);
+                    if field.field_type.count > 0 {
+                        for index in 0..field.field_type.count {
+                            prefixes.push(index.to_string());
+                            if let Some(element) = child_fields.get(index as usize) {
+                                if let Some(child_fields) = &element.children {
+                                    prefixes = self.dump_fields_recursive(
+                                        child_fields,
+                                        serializer,
+                                        prefixes,
+                                    );
+                                }
+                            }
+                            prefixes.pop();
+                        }
+                    } else {
+                        prefixes = self.dump_fields_recursive(child_fields, serializer, prefixes);
+                    }
+                } else {
+                    for (index, field) in child_fields.iter().enumerate() {
+                        println!(
+                            "{:}: {:?}",
+                            prefixes.join(".") + &format!(".{}", index),
+                            &field.value
+                        );
+                    }
                 }
             }
             prefixes.pop();
@@ -146,7 +185,7 @@ impl Entity {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FieldState {
     pub value: Option<FieldValue>,
     pub children: Option<Vec<FieldState>>,
