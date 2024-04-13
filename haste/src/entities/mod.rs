@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, f64::consts::E, fmt::Debug, ops::Deref, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 use fxhash::FxHashMap;
 use haste_protobuf::dota::{self, CsvcMsgFlattenedSerializer};
