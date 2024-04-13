@@ -1,4 +1,4 @@
-use std::io::{Read, Seek};
+use std::io::Read;
 
 use haste_protobuf::{dota, Demo, DemoKind, Packet, PacketKind};
 
@@ -69,7 +69,7 @@ impl Parser {
         }
     }
 
-    pub fn parse<R: Read + Seek, T: EventHandler>(
+    pub fn parse<R: Read, T: EventHandler>(
         &mut self,
         data: &mut R,
         event_handler: &mut T,

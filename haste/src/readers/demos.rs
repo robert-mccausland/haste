@@ -3,7 +3,7 @@ use bytes::Buf;
 use haste_protobuf::{Demo, DemoKind};
 use std::{
     collections::HashSet,
-    io::{Read, Seek},
+    io::{self, Read},
 };
 
 const BUF_SIZE: usize = 512;
@@ -23,14 +23,14 @@ impl core::fmt::Debug for DemoMessage {
     }
 }
 
-pub struct DemoReader<R: Read + Seek> {
+pub struct DemoReader<R: Read> {
     data: R,
     buffer: [u8; BUF_SIZE],
     initialized_bytes: usize,
     messages_kinds: HashSet<DemoKind>,
 }
 
-impl<R: Read + Seek> DemoReader<R> {
+impl<R: Read> DemoReader<R> {
     pub fn new(data: R, message_kinds: Vec<DemoKind>) -> Self {
         Self {
             data,
@@ -66,8 +66,10 @@ impl<R: Read + Seek> DemoReader<R> {
 
             let message = if !self.messages_kinds.contains(&kind) {
                 if size > remaining {
-                    self.data
-                        .seek(std::io::SeekFrom::Current((size - remaining).try_into()?))?;
+                    io::copy(
+                        &mut (&mut self.data).take((size - remaining) as u64),
+                        &mut io::sink(),
+                    )?;
                     buffer.advance(remaining);
                 } else {
                     buffer.advance(size);
@@ -105,7 +107,7 @@ impl<R: Read + Seek> DemoReader<R> {
     }
 }
 
-impl<R: Read + Seek> Iterator for DemoReader<R> {
+impl<R: Read> Iterator for DemoReader<R> {
     type Item = Result<DemoMessage>;
 
     fn next(&mut self) -> Option<Self::Item> {
