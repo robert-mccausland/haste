@@ -5,7 +5,7 @@ import "dota_gcmessages_common.proto";
 message CSourceTVGameSmall {
 	message Player {
 		optional uint32 account_id = 1;
-		optional uint32 hero_id = 2;
+		optional int32 hero_id = 2;
 		optional uint32 team_slot = 3;
 		optional uint32 team = 4;
 	}
@@ -41,12 +41,14 @@ message CSourceTVGameSmall {
 	optional uint32 weekend_tourney_skill_level = 28;
 	optional uint32 weekend_tourney_bracket_round = 29;
 	optional uint32 custom_game_difficulty = 32;
+	optional bool is_player_draft = 33;
+	optional bool is_watch_eligible = 34;
 }
 
 message CMsgClientToGCFindTopSourceTVGames {
 	optional string search_key = 1;
 	optional uint32 league_id = 2;
-	optional uint32 hero_id = 3;
+	optional int32 hero_id = 3;
 	optional uint32 start_game = 4;
 	optional uint32 game_list_index = 5;
 	repeated uint64 lobby_ids = 6;
@@ -55,7 +57,7 @@ message CMsgClientToGCFindTopSourceTVGames {
 message CMsgGCToClientFindTopSourceTVGamesResponse {
 	optional string search_key = 1;
 	optional uint32 league_id = 2;
-	optional uint32 hero_id = 3;
+	optional int32 hero_id = 3;
 	optional uint32 start_game = 4;
 	optional uint32 num_games = 5;
 	optional uint32 game_list_index = 6;
@@ -163,6 +165,7 @@ message CMsgWatchGameResponse {
 	optional fixed64 game_server_steamid = 5;
 	optional fixed64 watch_server_steamid = 6;
 	optional fixed64 watch_tv_unique_secret_code = 7;
+	optional string broadcast_url = 8;
 }
 
 message CMsgPartyLeaderWatchGamePrompt {

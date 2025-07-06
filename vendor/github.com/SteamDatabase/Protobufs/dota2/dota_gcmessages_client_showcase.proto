@@ -93,12 +93,12 @@ message CMsgShowcaseItem_EconItem {
 message CMsgShowcaseItem_Hero {
 	message Data {
 		repeated .CSOEconItem econ_items = 1;
-		optional uint32 actual_hero_id = 2;
+		optional int32 actual_hero_id = 2;
 		optional uint32 plus_hero_xp = 3;
 	}
 
 	optional .CMsgShowcaseItem_Hero.Data data = 1;
-	optional uint32 hero_id = 2;
+	optional int32 hero_id = 2;
 	repeated .CMsgShowcaseEconItemReference econ_item_refs = 3;
 	optional uint32 rotation = 4;
 	optional uint32 flags = 5;
@@ -117,13 +117,13 @@ message CMsgShowcaseItem_HeroIcon {
 	}
 
 	optional .CMsgShowcaseItem_HeroIcon.Data data = 1;
-	optional uint32 hero_id = 2;
+	optional int32 hero_id = 2;
 	optional .CMsgShowcaseEconItemReference econ_item_ref = 3;
 }
 
 message CMsgShowcaseItem_PlayerMatch {
 	message Data {
-		optional uint32 hero_id = 1;
+		optional int32 hero_id = 1;
 		optional uint32 timestamp = 2;
 		optional uint32 duration = 3;
 		optional .DOTA_GameMode game_mode = 4 [default = DOTA_GAMEMODE_NONE];
@@ -216,6 +216,7 @@ message CMsgShowcaseItemData {
 		.CMsgShowcaseItem_EconItem creep = 17;
 		.CMsgShowcaseItem_EconItem tower = 18;
 		.CMsgShowcaseItem_EconItem effigy = 19;
+		.CMsgShowcaseItem_EconItem decoration = 20;
 		.CMsgShowcaseBackground background = 100;
 	}
 }

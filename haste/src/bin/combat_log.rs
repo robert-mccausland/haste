@@ -4,8 +4,12 @@ use std::{fs::File, io::Write, time::Instant};
 
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
-    let replay_file_path =
-        "H:\\SteamLibrary\\steamapps\\common\\dota 2 beta\\game\\dota\\replays\\7588607085.dem";
+    let match_id = 8364473605u64;
+    //let match_id = 7588607085u64;
+    let replay_file_path = format!(
+        "H:\\SteamLibrary\\steamapps\\common\\dota 2 beta\\game\\dota\\replays\\{:}.dem",
+        match_id
+    );
     let mut file = File::open(replay_file_path).unwrap();
     let mut handler = CombatLogHandler {
         output: File::create("./combat-log.txt").unwrap(),

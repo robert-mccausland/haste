@@ -44,7 +44,7 @@ macro_rules! decoder {
                     $(
                         x if x == $enum_kind_name::$name as u32 => Ok($enum_kind_name::$name),
                     )*
-                    _ => Err(format!("invalid message kind: {:?}", v).into()),
+                    _ => Err(format!("invalid {:} kind: {:?}", stringify!($enum_name), v).into()),
                 }
             }
         }
@@ -79,7 +79,10 @@ decoder!(
     [8, SignOnPacket, dota::CDemoPacket],
     [13, FullPacket, dota::CDemoFullPacket],
     [14, SaveGame, dota::CDemoSaveGame],
-    [15, SpawnGroups, dota::CDemoSpawnGroups]
+    [15, SpawnGroups, dota::CDemoSpawnGroups],
+    [16, AnimationData, dota::CDemoAnimationData],
+    [17, AnimationHeader, dota::CDemoAnimationHeader],
+    [18, Recovery, dota::CDemoRecovery]
 );
 
 decoder!(
@@ -87,7 +90,6 @@ decoder!(
     PacketKind,
     // NET_Messages
     [0, NetNop, dota::CnetMsgNop],
-    [1, Disconnect, dota::CnetMsgDisconnect],
     [4, Tick, dota::CnetMsgTick],
     [6, SetConVar, dota::CnetMsgSetConVar],
     [7, SignonState, dota::CnetMsgSignonState],
@@ -227,7 +229,6 @@ decoder!(
     ],
     [534, EnemyItemAlert, dota::CdotaUserMsgEnemyItemAlert],
     [540, QuickBuyAlert, dota::CdotaUserMsgQuickBuyAlert],
-    [542, PredictionResult, dota::CdotaUserMsgPredictionResult],
     [543, ModifierAlert, dota::CdotaUserMsgModifierAlert],
     [544, HPManaAlert, dota::CdotaUserMsgHpManaAlert],
     [
@@ -298,7 +299,6 @@ decoder!(
     ],
     [584, HighFiveCompleted, dota::CdotaUserMsgHighFiveCompleted],
     [585, ShovelUnearth, dota::CdotaUserMsgShovelUnearth],
-    [586, InvokerSpellCast, dota::CdotaEntityMsgInvokerSpellCast],
     [587, RadarAlert, dota::CdotaUserMsgRadarAlert],
     [588, AllStarEvent, dota::CdotaUserMsgAllStarEvent],
     [589, TalentTreeAlert, dota::CdotaUserMsgTalentTreeAlert],
@@ -330,5 +330,49 @@ decoder!(
     ],
     [605, WrArcanaProgress, dota::CdotaUserMsgWrArcanaProgress],
     [606, WrArcanaSummary, dota::CdotaUserMsgWrArcanaSummary],
-    [612, ChatMessage, dota::CdotaUserMsgChatMessage]
+    [612, ChatMessage, dota::CdotaUserMsgChatMessage],
+    [613, NeutralCampAlert, dota::CdotaUserMsgNeutralCampAlert],
+    [
+        614,
+        RockPaperScissorsStarted,
+        dota::CdotaUserMsgRockPaperScissorsStarted
+    ],
+    [
+        615,
+        RockPaperScissorsFinished,
+        dota::CdotaUserMsgRockPaperScissorsFinished
+    ],
+    [
+        616,
+        DuelOpponentKilled,
+        dota::CdotaUserMsgDuelOpponentKilled
+    ],
+    [617, DuelAccepted, dota::CdotaUserMsgDuelAccepted],
+    [618, DuelRequested, dota::CdotaUserMsgDuelRequested],
+    [
+        619,
+        MuertaReleaseEventAssignedTargetKilled,
+        dota::CdotaUserMsgMuertaReleaseEventAssignedTargetKilled
+    ],
+    [
+        620,
+        PlayerDraftSuggestPick,
+        dota::CdotaUserMsgPlayerDraftSuggestPick
+    ],
+    [621, PlayerDraftPick, dota::CdotaUserMsgPlayerDraftPick],
+    [624, FacetPing, dota::CdotaUserMsgFacetPing],
+    [625, InnatePing, dota::CdotaUserMsgInnatePing],
+    [626, RoshanTimer, dota::CdotaUserMsgRoshanTimer],
+    [
+        627,
+        NeutralCraftAvailable,
+        dota::CdotaUserMsgNeutralCraftAvailable
+    ],
+    [628, TimerAlert, dota::CdotaUserMsgTimerAlert],
+    [629, MadstoneAlert, dota::CdotaUserMsgMadstoneAlert],
+    [
+        630,
+        CourierLeftFountainAlert,
+        dota::CdotaUserMsgCourierLeftFountainAlert
+    ]
 );

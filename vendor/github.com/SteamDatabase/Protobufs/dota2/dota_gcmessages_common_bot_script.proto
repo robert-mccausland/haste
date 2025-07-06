@@ -11,7 +11,7 @@ message CMsgBotWorldState {
 
 	message Player {
 		optional int32 player_id = 1 [(valve_map_key) = true];
-		optional uint32 hero_id = 2;
+		optional int32 hero_id = 2;
 		optional bool is_alive = 3;
 		optional float respawn_time = 4;
 		optional uint32 kills = 5;
@@ -268,6 +268,8 @@ message CMsgBotWorldState {
 		COURIER_STATE_DELIVERING_ITEMS = 3;
 		COURIER_STATE_RETURNING_TO_BASE = 4;
 		COURIER_STATE_DEAD = 5;
+		COURIER_STATE_GOING_TO_SECRET_SHOP = 6;
+		COURIER_STATE_AT_SECRET_SHOP = 7;
 	}
 
 	optional uint32 team_id = 1;

@@ -6,7 +6,7 @@ git_root="$(git rev-parse --show-toplevel)"
 destinationDir="${git_root}/vendor/github.com/SteamDatabase/Protobufs"
 
 # SteamDB protobuf commit that we want to base these files off
-protobufCommit="686a062"
+protobufCommit="031ff24abb31e19e9119393807ab594608b214c0"
 
 # Create temp folder for checking out the SteamDB protobuf repo
 temp=$(mktemp -d)
