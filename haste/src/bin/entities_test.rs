@@ -1,10 +1,14 @@
+use ahash::AHashSet;
 use haste::parser::{EventHandler, Parser};
-use std::{collections::HashSet, fs::File, time::Instant};
+use std::{fs::File, time::Instant};
 
 fn main() {
-    std::env::set_var("RUST_BACKTRACE", "1");
-    let replay_file_path =
-        "H:\\SteamLibrary\\steamapps\\common\\dota 2 beta\\game\\dota\\replays\\7588607085.dem";
+    let match_id = 8364473605u64;
+    //let match_id = 7588607085u64;
+    let replay_file_path = format!(
+        "H:\\SteamLibrary\\steamapps\\common\\dota 2 beta\\game\\dota\\replays\\{:}.dem",
+        match_id
+    );
     let mut file = File::open(replay_file_path).unwrap();
     let mut handler = Handler::new();
     let start = Instant::now();
@@ -16,13 +20,13 @@ fn main() {
 }
 
 struct Handler {
-    pub class_names: HashSet<String>,
+    pub class_names: AHashSet<String>,
 }
 
 impl Handler {
     pub fn new() -> Self {
         Self {
-            class_names: HashSet::new(),
+            class_names: AHashSet::new(),
         }
     }
 }

@@ -1,9 +1,8 @@
 use haste::parser::{EventHandler, Parser, ParserContext};
-use haste_protobuf::{dota::DotaCombatlogTypes, Packet, PacketKind};
+use haste_protobuf::{Packet, PacketKind, dota::DotaCombatlogTypes};
 use std::{fs::File, io::Write, time::Instant};
 
 fn main() {
-    std::env::set_var("RUST_BACKTRACE", "1");
     let match_id = 8364473605u64;
     //let match_id = 7588607085u64;
     let replay_file_path = format!(

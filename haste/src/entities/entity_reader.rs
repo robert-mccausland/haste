@@ -1,35 +1,35 @@
-use std::{cell::RefCell, mem::MaybeUninit, ops::Deref, rc::Rc};
+use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 use crate::{
+    Result,
     decoders::Bits,
     entities::{Class, Entity, FieldPath, FieldState, Serializer},
     huffman_tree,
     readers::bits::BitReader,
-    Result,
 };
 
-use fxhash::FxHashMap;
+use ahash::AHashMap;
 
 use super::{
+    FieldModel, FieldValue,
     field_decoders::{decode_boolean, decode_field, decode_field_by_type, decode_unsigned},
     field_paths::FIELD_PATH_TREE,
-    FieldModel, FieldValue,
 };
 
 pub struct EntityReader<'a> {
     current_index: i32,
     class_id_size: usize,
-    classes: &'a FxHashMap<u32, Rc<RefCell<Class>>>,
-    entities: &'a mut FxHashMap<u32, Entity>,
-    paths_cache: [MaybeUninit<FieldPath>; 2048],
+    classes: &'a AHashMap<u32, Rc<RefCell<Class>>>,
+    entities: &'a mut AHashMap<u32, Entity>,
     data: BitReader<'a>,
+    field_paths_cache: Vec<FieldPath>,
 }
 
 impl<'a> EntityReader<'a> {
     pub fn new(
         max_classes: u32,
-        classes: &'a FxHashMap<u32, Rc<RefCell<Class>>>,
-        entities: &'a mut FxHashMap<u32, Entity>,
+        classes: &'a AHashMap<u32, Rc<RefCell<Class>>>,
+        entities: &'a mut AHashMap<u32, Entity>,
         data: &'a [u8],
     ) -> Self {
         let class_id_size = (max_classes as f64).log2().ceil() as usize;
@@ -38,8 +38,8 @@ impl<'a> EntityReader<'a> {
             class_id_size,
             classes,
             entities,
-            paths_cache: unsafe { MaybeUninit::uninit().assume_init() },
             data: BitReader::new(data),
+            field_paths_cache: Vec::new(),
         }
     }
 
@@ -49,7 +49,6 @@ impl<'a> EntityReader<'a> {
 
         let is_deactivate = command & 1 != 0;
         let is_create = command & 2 != 0;
-
         if !is_deactivate {
             if is_create {
                 let class_id = self.data.read_bits(self.class_id_size).try_into()?;
@@ -75,13 +74,13 @@ impl<'a> EntityReader<'a> {
                     &mut baseline,
                     class.borrow().serializer.as_ref(),
                     &mut entity.fields,
-                    &mut self.paths_cache,
+                    &mut self.field_paths_cache,
                 )?;
                 Self::read_fields(
                     &mut self.data,
                     class.borrow().serializer.as_ref(),
                     &mut entity.fields,
-                    &mut self.paths_cache,
+                    &mut self.field_paths_cache,
                 )?;
                 self.entities.insert(self.current_index.try_into()?, entity);
             } else {
@@ -94,7 +93,7 @@ impl<'a> EntityReader<'a> {
                     &mut self.data,
                     entity.class.borrow().serializer.as_ref(),
                     &mut entity.fields,
-                    &mut self.paths_cache,
+                    &mut self.field_paths_cache,
                 )?;
 
                 self.entities.insert(index, entity);
@@ -122,13 +121,11 @@ impl<'a> EntityReader<'a> {
         data: &'b mut BitReader,
         serializer: &Serializer,
         entity_fields: &mut Vec<FieldState>,
-        paths_cache: &mut [MaybeUninit<FieldPath>; 2048],
+        field_paths_cache: &mut Vec<FieldPath>,
     ) -> Result<()> {
-        let count = read_field_paths(data, paths_cache);
-
-        for index in 0..count {
-            let field_path = unsafe { paths_cache[index].assume_init_ref() };
-            let value = Self::parse_field(data, serializer, field_path, 0)?;
+        read_field_paths(data, field_paths_cache)?;
+        for field_path in field_paths_cache {
+            let value = Self::parse_field(data, serializer, &field_path, 0)?;
             let mut fields = &mut *entity_fields;
             for (index, position) in field_path.path.iter().enumerate() {
                 while fields.get(*position as usize).is_none() {
@@ -150,7 +147,6 @@ impl<'a> EntityReader<'a> {
 
                 fields = state.children.as_mut().unwrap();
             }
-            unsafe { paths_cache[index].assume_init_drop() }
         }
 
         Ok(())
@@ -216,9 +212,9 @@ impl<'a> EntityReader<'a> {
     }
 }
 
-fn read_field_paths(data: &mut BitReader, output: &mut [MaybeUninit<FieldPath>]) -> usize {
+fn read_field_paths(data: &mut BitReader, field_paths_cache: &mut Vec<FieldPath>) -> Result<()> {
     let mut node = FIELD_PATH_TREE.deref();
-    let mut index = 0;
+    field_paths_cache.clear();
     let mut current = FieldPath {
         last: 0,
         path: [-1, 0, 0, 0, 0, 0, 0],
@@ -229,10 +225,9 @@ fn read_field_paths(data: &mut BitReader, output: &mut [MaybeUninit<FieldPath>])
             huffman_tree::NodeContent::Leaf(value) => {
                 (value.operation)(data, &mut current);
                 if value.is_final {
-                    return index;
+                    return Ok(());
                 } else {
-                    output[index] = MaybeUninit::new(current.clone());
-                    index += 1;
+                    field_paths_cache.push(current.clone());
                     node = FIELD_PATH_TREE.deref();
                 };
             }

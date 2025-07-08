@@ -40,7 +40,9 @@ pub fn decode_field_by_type(data: &mut BitReader, field_type: &str) -> Result<Fi
             Ok(FieldValue::Signed32(data.read_varint_i32()?))
         }
         "GameTime_t" => Ok(FieldValue::Float(decode_f32_no_scale(data))),
-        "MatchID_t" | "itemid_t" => Ok(FieldValue::Unsigned64(data.read_varint_u64()?)),
+        "MatchID_t" | "itemid_t" | "HeroFacetKey_t" => {
+            Ok(FieldValue::Unsigned64(data.read_varint_u64()?))
+        }
         _ => decode_unsigned(data),
     }
 }

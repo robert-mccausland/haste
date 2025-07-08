@@ -1,10 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
-use fxhash::FxHashMap;
+use ahash::AHashMap;
 use haste_protobuf::dota::{self, CsvcMsgFlattenedSerializer};
 use prost::Message;
 
-use crate::{decoders::Bits, readers::bits::BitReader, string_tables::StringTable, utils, Result};
+use crate::{Result, decoders::Bits, readers::bits::BitReader, string_tables::StringTable, utils};
 
 use self::{entity_reader::EntityReader, field_paths::FieldPath, serializers::read_serializers};
 
@@ -139,9 +139,6 @@ impl Entity {
                 continue;
             }
 
-            if field.var_name == "m_AbilityDraftAbilities" {
-                println!("here")
-            }
             prefixes.push(field.var_name.to_owned());
             println!(
                 "{:}: {:?}",
@@ -194,8 +191,8 @@ pub struct FieldState {
 pub struct Entities {
     max_classes: u32,
     full_entity_packet_count: u32,
-    classes: FxHashMap<u32, Rc<RefCell<Class>>>,
-    entities: FxHashMap<u32, Entity>,
+    classes: AHashMap<u32, Rc<RefCell<Class>>>,
+    entities: AHashMap<u32, Entity>,
     serializers: HashMap<String, HashMap<i32, Rc<Serializer>>>,
 }
 
@@ -204,8 +201,8 @@ impl Entities {
         Self {
             max_classes: 0,
             full_entity_packet_count: 0,
-            classes: FxHashMap::default(),
-            entities: FxHashMap::default(),
+            classes: AHashMap::default(),
+            entities: AHashMap::default(),
             serializers: HashMap::new(),
         }
     }
