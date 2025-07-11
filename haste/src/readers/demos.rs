@@ -1,4 +1,4 @@
-use crate::{decoders::Bytes, Result};
+use crate::{Result, decoders::Bytes};
 use bytes::Buf;
 use haste_protobuf::{Demo, DemoKind};
 use std::{
@@ -98,7 +98,7 @@ impl<R: Read> DemoReader<R> {
             // Copy the end of whatever we did not read to the start of the buffer
             self.initialized_bytes = buffer.remaining();
             self.buffer
-                .copy_within((BUF_SIZE - self.initialized_bytes).., 0);
+                .copy_within((total_bytes - self.initialized_bytes)..total_bytes, 0);
 
             if let Some(message) = message {
                 return Ok(Some(message));
