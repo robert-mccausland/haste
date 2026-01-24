@@ -1,4 +1,4 @@
-use crate::{decoders::Bits, entities::Field, readers::bits::BitReader, Result};
+use crate::{Result, decoders::Bits, entities::Field, readers::bits::BitReader};
 
 use super::quantized_float::QuantizedFloatDecoder;
 

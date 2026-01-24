@@ -1,6 +1,6 @@
 use bytes::Buf;
 
-use crate::{readers::bits::BitReader, Result};
+use crate::{Result, readers::bits::BitReader};
 
 pub trait Bytes {
     fn decode_varint(&mut self) -> Result<u64>;
@@ -23,12 +23,7 @@ impl<B: Buf> Bytes for B {
     }
 
     fn decode_varint_signed(&mut self) -> Result<i32> {
-        // Safety: its probably fine idk
-        unsafe {
-            Ok(core::mem::transmute::<u32, i32>(
-                self.decode_varint()?.try_into()?,
-            ))
-        }
+        Ok(u32::cast_signed(self.decode_varint()?.try_into()?))
     }
 }
 
@@ -44,11 +39,13 @@ impl<'a> Bits for BitReader<'a> {
             result |= (byte & 0x7F) << offset;
 
             if byte < 0x80 {
-                return Ok(result);
+                break;
             }
 
             offset += 7;
         }
+
+        return Ok(result);
     }
 
     fn read_varint_u32(&mut self) -> Result<u32> {

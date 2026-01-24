@@ -1,4 +1,4 @@
-use crate::{decoders::Bits, readers::bits::BitReader, Result};
+use crate::{Result, decoders::Bits, readers::bits::BitReader};
 
 pub struct QuantizedFloatDecoder {
     low: f32,

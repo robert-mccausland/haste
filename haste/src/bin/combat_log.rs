@@ -28,7 +28,7 @@ struct CombatLogHandler<W: Write> {
 const DEFAULT_NAME: &str = "NULL";
 
 impl<W: Write> EventHandler for CombatLogHandler<W> {
-    fn on_packet(&mut self, demo: Packet, context: &ParserContext) -> haste::Result<()> {
+    fn on_packet(&mut self, demo: &Packet, context: &ParserContext) -> haste::Result<()> {
         if let Packet::CombatLogData(entry) = demo {
             let combat_log_names = context.string_tables.get_by_name("CombatLogNames");
             let get_name = |index: u32| -> &str {

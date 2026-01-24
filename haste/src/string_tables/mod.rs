@@ -9,6 +9,7 @@ use crate::Result;
 
 use self::reader::StringTableReader;
 
+#[derive(Debug)]
 pub struct StringTables {
     string_tables: Vec<StringTable>,
     string_table_names: HashMap<String, usize>,
@@ -31,7 +32,7 @@ impl StringTables {
         self.string_tables.get(id)
     }
 
-    pub fn on_create_string_table(&mut self, message: CsvcMsgCreateStringTable) -> Result<()> {
+    pub fn on_create_string_table(&mut self, message: &CsvcMsgCreateStringTable) -> Result<()> {
         let table_name = message
             .name
             .as_ref()
@@ -52,7 +53,7 @@ impl StringTables {
         let data = if message.data_compressed() {
             snap::raw::Decoder::new().decompress_vec(message.string_data())?
         } else {
-            message.string_data.unwrap_or_default()
+            message.clone().string_data.unwrap_or_default()
         };
 
         string_table.update_entries(
@@ -61,14 +62,14 @@ impl StringTables {
         )?;
 
         self.string_table_names
-            .insert(message.name.unwrap(), self.string_tables.len());
+            .insert(message.clone().name.unwrap(), self.string_tables.len());
 
         self.string_tables.push(string_table);
 
         Ok(())
     }
 
-    pub fn on_update_string_table(&mut self, message: CsvcMsgUpdateStringTable) -> Result<()> {
+    pub fn on_update_string_table(&mut self, message: &CsvcMsgUpdateStringTable) -> Result<()> {
         if let Some(string_table) = self
             .string_tables
             .get_mut(TryInto::<usize>::try_into(message.table_id())?)
@@ -83,6 +84,7 @@ impl StringTables {
     }
 }
 
+#[derive(Debug)]
 pub struct StringTable {
     name: String,
     data_size_bits: Option<usize>,
@@ -92,6 +94,7 @@ pub struct StringTable {
     entries_by_name: HashMap<Rc<str>, u32>,
 }
 
+#[derive(Debug)]
 pub struct StringTableEntry<'a> {
     pub index: u32,
     pub name: &'a str,
@@ -119,7 +122,7 @@ impl StringTable {
         self.name.as_ref()
     }
 
-    pub fn get_entry(&self, index: u32) -> Option<StringTableEntry> {
+    pub fn get_entry(&self, index: u32) -> Option<StringTableEntry<'_>> {
         if let Some(entry) = self.entries.get(&index) {
             return Some(StringTableEntry {
                 index,
@@ -131,7 +134,7 @@ impl StringTable {
         }
     }
 
-    pub fn get_entry_by_name(&self, name: &str) -> Option<StringTableEntry> {
+    pub fn get_entry_by_name(&self, name: &str) -> Option<StringTableEntry<'_>> {
         if let Some(id) = self.entries_by_name.get(name) {
             return self.get_entry(*id);
         } else {
@@ -139,7 +142,7 @@ impl StringTable {
         }
     }
 
-    pub fn get_entries(&self) -> Vec<StringTableEntry> {
+    pub fn get_entries(&self) -> Vec<StringTableEntry<'_>> {
         self.entries
             .iter()
             .map(|(index, value)| StringTableEntry {

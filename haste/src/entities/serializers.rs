@@ -5,9 +5,9 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::{
+    Result,
     entities::{Field, FieldType, Serializer},
     utils::transmute_i32_to_u32,
-    Result,
 };
 
 use super::FieldModel;

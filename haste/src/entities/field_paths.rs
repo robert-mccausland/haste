@@ -40,11 +40,7 @@ impl<'a> Clone for FieldPathOperation {
 
 impl<'a> Weighted for FieldPathOperation {
     fn weight(&self) -> u32 {
-        if self.weight == 0 {
-            1
-        } else {
-            self.weight
-        }
+        if self.weight == 0 { 1 } else { self.weight }
     }
 }
 

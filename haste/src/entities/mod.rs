@@ -188,6 +188,7 @@ pub struct FieldState {
     pub children: Option<Vec<FieldState>>,
 }
 
+#[derive(Debug)]
 pub struct Entities {
     max_classes: u32,
     full_entity_packet_count: u32,
@@ -235,21 +236,24 @@ impl Entities {
         self.max_classes = max_classes
     }
 
-    pub fn on_class_info(&mut self, class_info: dota::CDemoClassInfo) -> Result<()> {
-        for class in class_info.classes {
+    pub fn on_class_info(&mut self, class_info: &dota::CDemoClassInfo) -> Result<()> {
+        for class in &class_info.classes {
             let id = class.class_id.ok_or("class did not have id")?.try_into()?;
-            let name = class.network_name.ok_or("class did not have name")?;
+            let name = class
+                .network_name
+                .as_ref()
+                .ok_or("class did not have name")?;
             let class = Rc::from(RefCell::from(Class {
                 id,
                 serializer: utils::expect_one(
                     self.serializers
-                        .get(&name)
+                        .get(name)
                         .ok_or("could not find class serializer")?
                         .values(),
                 )?
                 .clone(),
                 baseline: vec![],
-                name,
+                name: name.to_string(),
             }));
             self.classes.insert(id, class);
         }
@@ -257,7 +261,7 @@ impl Entities {
         Ok(())
     }
 
-    pub fn on_send_tables(&mut self, send_tables: dota::CDemoSendTables) -> Result<()> {
+    pub fn on_send_tables(&mut self, send_tables: &dota::CDemoSendTables) -> Result<()> {
         let mut data = BitReader::new(send_tables.data());
         let size = data.read_varint_u32()?;
         self.serializers = read_serializers(&CsvcMsgFlattenedSerializer::decode(
@@ -267,14 +271,14 @@ impl Entities {
         Ok(())
     }
 
-    pub fn on_server_info(&mut self, server_info: dota::CsvcMsgServerInfo) -> Result<()> {
+    pub fn on_server_info(&mut self, server_info: &dota::CsvcMsgServerInfo) -> Result<()> {
         self.max_classes = server_info.max_classes().try_into()?;
         Ok(())
     }
 
     pub fn on_packet_entities(
         &mut self,
-        packet_entities: dota::CsvcMsgPacketEntities,
+        packet_entities: &dota::CsvcMsgPacketEntities,
     ) -> Result<Vec<i32>> {
         if !packet_entities.legacy_is_delta() {
             if self.full_entity_packet_count > 0 {

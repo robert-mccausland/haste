@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use haste_protobuf::{Packet, PacketKind};
 
-use crate::{decoders::Bits, readers::bits::BitReader, Result};
+use crate::{Result, decoders::Bits, readers::bits::BitReader};
 
 pub struct PacketReader<'a> {
     stream: BitReader<'a>,
