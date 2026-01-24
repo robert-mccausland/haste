@@ -6,7 +6,7 @@ git_root="$(git rev-parse --show-toplevel)"
 destinationDir="${git_root}/vendor/github.com/SteamDatabase/Protobufs"
 
 # SteamDB protobuf commit that we want to base these files off
-protobufCommit="031ff24abb31e19e9119393807ab594608b214c0"
+protobufCommit="269ce67ab89762b66364ad4db324dd3b106debe1"
 
 # Create temp folder for checking out the SteamDB protobuf repo
 temp=$(mktemp -d)
@@ -18,7 +18,7 @@ git sparse-checkout set dota2 google
 git checkout "${protobufCommit}"
 
 # These files cause the protobuf build to break and we dont need them
-rm dota2/steammessages_base.proto dota2/steammessages_clientserver_login.proto
+rm -f dota2/steammessages_base.proto dota2/steammessages_clientserver_login.proto
 
 # Append header to the protobuf files as they compile with a modern compiler
 for file in dota2/*.proto; do

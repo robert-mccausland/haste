@@ -3,6 +3,7 @@ syntax = "proto2";
 import "steammessages.proto";
 import "gcsdk_gcmessages.proto";
 import "dota_shared_enums.proto";
+import "networkbasetypes.proto";
 
 enum ESpecialPingValue {
 	k_ESpecialPingValue_NoData = 16382;
@@ -882,6 +883,7 @@ message CMsgDOTASeasonPredictions {
 		repeated .ELeaguePhase phases = 18;
 		optional .EEvent reward_event = 19 [default = EVENT_ID_NONE];
 		optional uint32 league_node_id = 20;
+		optional string reward_event_action = 21;
 	}
 
 	repeated .CMsgDOTASeasonPredictions.Prediction predictions = 1;
@@ -914,6 +916,8 @@ message CMsgLeagueWatchedGames {
 }
 
 message CMsgDOTAMatch {
+	option (maximum_size_bytes) = 4096;
+
 	message Player {
 		message CustomGameData {
 			optional uint32 dota_team = 1;
@@ -965,6 +969,7 @@ message CMsgDOTAMatch {
 		optional uint32 hero_damage = 24;
 		optional uint32 tower_damage = 25;
 		optional uint32 hero_healing = 26;
+		optional uint32 disable_duration = 85;
 		optional uint32 level = 27;
 		optional uint32 time_last_seen = 28;
 		optional string player_name = 29;
@@ -1750,6 +1755,15 @@ message CMsgDOTAClaimEventActionResponse {
 		repeated .CMsgDOTAClaimEventActionResponse.OverworldTokenRewardData.TokenQuantity tokens = 1;
 	}
 
+	message MonsterHunterMaterialRewardData {
+		message MaterialQuantity {
+			optional uint32 material_id = 1;
+			optional uint32 material_count = 2;
+		}
+
+		repeated .CMsgDOTAClaimEventActionResponse.MonsterHunterMaterialRewardData.MaterialQuantity materials = 1;
+	}
+
 	message GrantedRewardData {
 		optional uint32 grant_index = 1;
 		optional uint32 score_index = 2;
@@ -1916,6 +1930,9 @@ message CDotaMsgStructuredTooltipProperties {
 		kPureDamage = 8;
 		kCooldown = 9;
 		kDebuffPercentage = 10;
+		kDebuffValue = 11;
+		kBuffPercentage = 12;
+		kBuffValue = 13;
 	}
 
 	optional string ability_name_loc_token = 1;
