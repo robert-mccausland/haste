@@ -98,7 +98,7 @@ pub struct StringTable {
 pub struct StringTableEntry {
     pub index: u32,
     pub name: String,
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl StringTable {
@@ -163,8 +163,14 @@ impl StringTable {
                 if let Some(name) = entry.name {
                     let name = Rc::<str>::from(name.as_str());
                     self.entries_by_name.insert(name.to_string(), entry.index);
-                    self.entries
-                        .insert(entry.index, StringTableEntry { index: entry.index, name: name.to_string(), data: entry.data.unwrap_or_default() });
+                    self.entries.insert(
+                        entry.index,
+                        StringTableEntry {
+                            index: entry.index,
+                            name: name.to_string(),
+                            data: entry.data.unwrap_or_default(),
+                        },
+                    );
                 } else {
                     return Err(format!("new entries must have their name set").into());
                 }

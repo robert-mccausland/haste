@@ -1,10 +1,15 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, hash_map::Keys},
+    fmt::Debug,
+    rc::Rc,
+};
 
 use ahash::AHashMap;
 use haste_protobuf::dota::{self, CsvcMsgFlattenedSerializer};
 use prost::Message;
 
-use crate::{Result, decoders::Bits, readers::bits::BitReader, string_tables::StringTable, utils};
+use crate::{Result, decoders::Bits, entities, readers::bits::BitReader, string_tables::StringTable, utils};
 
 use self::{entity_reader::EntityReader, field_paths::FieldPath, serializers::read_serializers};
 
@@ -212,6 +217,10 @@ impl Entities {
         self.entities.get(&entity_id)
     }
 
+    pub fn iter(&self) -> EntitiesIterator<'_> {
+        EntitiesIterator::new(&self)
+    }
+
     pub fn update_baselines(&mut self, baselines: &StringTable) -> Result<()> {
         // Skip this if we have not had any class data yet
         if self.classes.len() == 0 {
@@ -300,5 +309,31 @@ impl Entities {
         }
 
         Ok(result)
+    }
+}
+
+pub struct EntitiesIterator<'a> {
+    entities: &'a Entities,
+    entity_ids: Keys<'a, u32, Entity>,
+}
+
+impl<'a> EntitiesIterator<'a> {
+    fn new(entities: &'a Entities) -> Self {
+        EntitiesIterator {
+            entities: entities,
+            entity_ids: entities.entities.keys(),
+        }
+    }
+}
+
+impl<'a> Iterator for EntitiesIterator<'a> {
+    type Item = &'a Entity;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.entity_ids.next() {
+            return self.entities.get(*id);
+        }
+
+        return None;
     }
 }

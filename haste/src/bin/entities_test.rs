@@ -4,7 +4,9 @@ use std::{env::args, fs::File, time::Instant};
 
 fn main() {
     let args = args().collect::<Vec<_>>();
-    let path = args.get(1).expect("Expected demo file path as first argument");
+    let path = args
+        .get(1)
+        .expect("Expected demo file path as first argument");
     let mut file = File::open(&path).unwrap();
     let mut handler = Handler::new();
     let start = Instant::now();
