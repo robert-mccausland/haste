@@ -1,15 +1,11 @@
 use ahash::AHashSet;
 use haste::parser::{EventHandler, Parser};
-use std::{fs::File, time::Instant};
+use std::{env::args, fs::File, time::Instant};
 
 fn main() {
-    let match_id = 8364473605u64;
-    //let match_id = 7588607085u64;
-    let replay_file_path = format!(
-        "H:\\SteamLibrary\\steamapps\\common\\dota 2 beta\\game\\dota\\replays\\{:}.dem",
-        match_id
-    );
-    let mut file = File::open(replay_file_path).unwrap();
+    let args = args().collect::<Vec<_>>();
+    let path = args.get(1).expect("Expected demo file path as first argument");
+    let mut file = File::open(&path).unwrap();
     let mut handler = Handler::new();
     let start = Instant::now();
     Parser::new(&[], &[], true)

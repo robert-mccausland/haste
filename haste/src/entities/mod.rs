@@ -221,7 +221,7 @@ impl Entities {
         for baseline in baselines.get_entries() {
             let class = self
                 .classes
-                .get_mut(&u32::from_str_radix(baseline.name, 10).map_err(|_err| {
+                .get_mut(&u32::from_str_radix(&baseline.name, 10).map_err(|_err| {
                     format!("invalid class id in baseline table: {:}", baseline.name)
                 })?)
                 .ok_or("could not find class")?;

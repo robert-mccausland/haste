@@ -374,5 +374,22 @@ decoder!(
         630,
         CourierLeftFountainAlert,
         dota::CdotaUserMsgCourierLeftFountainAlert
-    ]
+    ],
+    [
+        631,
+        MonsterHunterInvestigationsAvailable,
+        dota::CdotaUserMsgMonsterHunterInvestigationsAvailable
+    ],
+    [
+        632,
+        MonsterHunterInvestigationGameState,
+        dota::CdotaUserMsgMonsterHunterInvestigationGameState
+    ],
+    [
+        633,
+        MonsterHunterHuntAlert,
+        dota::CdotaUserMsgMonsterHunterHuntAlert
+    ],
+    [634, TormentorTimer, dota::CdotaUserMsgTormentorTimer],
+    [635, KillEffect, dota::CdotaUserMsgKillEffect]
 );

@@ -18,10 +18,9 @@ pub fn decode_field(data: &mut BitReader, field: &Field) -> Result<FieldValue> {
         "CNetworkedQuantizedFloat" => {
             return Ok(FieldValue::Float(decode_f32_quantized(data, field)?));
         }
-        "Vector" => return Ok(FieldValue::Vector3(decode_vector3(data, field)?)),
+        "Vector" | "VectorWS" => return Ok(FieldValue::Vector3(decode_vector3(data, field)?)),
         "Vector2D" => return Ok(FieldValue::Vector2(decode_vector2(data, field)?)),
         "Vector4D" => return Ok(FieldValue::Vector4(decode_vector4(data, field)?)),
-        "VectorWS" => return Ok(FieldValue::Vector3(decode_vector3(data, field)?)),
         "uint64" | "CStrongHandle" => return Ok(FieldValue::Unsigned64(decode_u64(data, field)?)),
         "QAngle" => return Ok(FieldValue::Vector3(decode_q_angle(data, field))),
         "CEntityHandle" | "CHandle" => return decode_unsigned(data),

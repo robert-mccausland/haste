@@ -90,15 +90,15 @@ pub struct StringTable {
     data_size_bits: Option<usize>,
     has_varint_bit_counts: bool,
     flags: u32,
-    entries: HashMap<u32, (Rc<str>, Vec<u8>)>,
-    entries_by_name: HashMap<Rc<str>, u32>,
+    entries: HashMap<u32, StringTableEntry>,
+    entries_by_name: HashMap<String, u32>,
 }
 
 #[derive(Debug)]
-pub struct StringTableEntry<'a> {
+pub struct StringTableEntry {
     pub index: u32,
-    pub name: &'a str,
-    pub data: &'a Vec<u8>,
+    pub name: String,
+    pub data: Vec<u8>
 }
 
 impl StringTable {
@@ -122,19 +122,11 @@ impl StringTable {
         self.name.as_ref()
     }
 
-    pub fn get_entry(&self, index: u32) -> Option<StringTableEntry<'_>> {
-        if let Some(entry) = self.entries.get(&index) {
-            return Some(StringTableEntry {
-                index,
-                name: entry.0.as_ref(),
-                data: entry.1.as_ref(),
-            });
-        } else {
-            return None;
-        }
+    pub fn get_entry(&self, index: u32) -> Option<&StringTableEntry> {
+        self.entries.get(&index)
     }
 
-    pub fn get_entry_by_name(&self, name: &str) -> Option<StringTableEntry<'_>> {
+    pub fn get_entry_by_name(&self, name: &str) -> Option<&StringTableEntry> {
         if let Some(id) = self.entries_by_name.get(name) {
             return self.get_entry(*id);
         } else {
@@ -142,15 +134,8 @@ impl StringTable {
         }
     }
 
-    pub fn get_entries(&self) -> Vec<StringTableEntry<'_>> {
-        self.entries
-            .iter()
-            .map(|(index, value)| StringTableEntry {
-                index: *index,
-                name: value.0.as_ref(),
-                data: value.1.as_ref(),
-            })
-            .collect()
+    pub fn get_entries(&self) -> Vec<&StringTableEntry> {
+        self.entries.values().collect()
     }
 
     pub fn update_entries(&mut self, data: &[u8], count: usize) -> Result<()> {
@@ -165,22 +150,21 @@ impl StringTable {
         for entry in reader {
             let entry = entry?;
 
-            if let Some(existing_entry) = self.entries.get(&entry.index) {
-                if let Some(ref name) = entry.name {
-                    if *existing_entry.0 != *name {
-                        return Err(format!(
-                            "name did not match existing entry, expected {}, got {}",
-                            existing_entry.0, name
-                        )
-                        .into());
-                    }
+            if let Some(existing_entry) = self.entries.get_mut(&entry.index) {
+                if let Some(name) = entry.name {
+                    existing_entry.name = name.to_string();
+                    self.entries_by_name.remove(&name);
+                    self.entries_by_name.insert(name.to_string(), entry.index);
+                }
+                if let Some(data) = entry.data {
+                    existing_entry.data = data
                 }
             } else {
                 if let Some(name) = entry.name {
                     let name = Rc::<str>::from(name.as_str());
-                    self.entries_by_name.insert(name.clone(), entry.index);
+                    self.entries_by_name.insert(name.to_string(), entry.index);
                     self.entries
-                        .insert(entry.index, (name, entry.data.unwrap_or_default()));
+                        .insert(entry.index, StringTableEntry { index: entry.index, name: name.to_string(), data: entry.data.unwrap_or_default() });
                 } else {
                     return Err(format!("new entries must have their name set").into());
                 }
